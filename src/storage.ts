@@ -17,7 +17,16 @@ export function loadHubState(): HubState {
       return initialState;
     }
 
-    return parsed;
+    return {
+      ...parsed,
+      profile: {
+        ...parsed.profile,
+        evidence: parsed.profile.evidence.map((item) => ({
+          ...item,
+          label: item.label.replaceAll('Focus Hub', 'FocusEdu')
+        }))
+      }
+    };
   } catch {
     return initialState;
   }

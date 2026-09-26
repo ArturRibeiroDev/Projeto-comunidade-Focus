@@ -57,7 +57,7 @@ export const initialProfile: MemberProfile = {
   evidence: [
     {
       id: 'evidence-profile-created',
-      label: 'Perfil inicial criado no Focus Hub',
+      label: 'Perfil inicial criado no FocusEdu',
       recordedAt: now
     }
   ]
