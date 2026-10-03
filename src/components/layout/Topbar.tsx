@@ -1,39 +1,96 @@
-import { Menu, Plus, Search } from 'lucide-react';
+import { Menu, Plus } from 'lucide-react';
+import type { MemberProfile, ProjectDisplay } from '../../types';
 import type { View } from '../../viewTypes';
 import { Button } from '../ui/Button';
 import { FocusLogo } from './FocusLogo';
+import { UserMenu } from './UserMenu';
+import { ProjectSearch } from './ProjectSearch';
 
 const titles: Record<View, string> = {
   dashboard: 'Dashboard',
   catalog: 'Projetos',
   'my-projects': 'Meus projetos',
   create: 'Criar projeto',
-  profile: 'Perfil'
+  profile: 'Perfil',
+  admin: 'Administração',
 };
 
-export function Topbar({ activeView, query, profileAvatar, onOpenMenu, onQueryChange, onCreate }: {
+export function Topbar({
+  activeView,
+  query,
+  profile,
+  projects,
+  onOpenMenu,
+  onQueryChange,
+  onSelectProject,
+  onViewAllSearch,
+  onCreate,
+  onNavigate,
+  onEditProfile,
+  onSignOut,
+}: {
   activeView: View;
   query: string;
-  profileAvatar: string;
+  profile: MemberProfile;
+  projects: ProjectDisplay[];
   onOpenMenu: () => void;
   onQueryChange: (query: string) => void;
+  onSelectProject: (id: string) => void;
+  onViewAllSearch: () => void;
   onCreate: () => void;
+  onNavigate: (view: View) => void;
+  onEditProfile: () => void;
+  onSignOut: () => void;
 }) {
   return (
     <header className="topbar">
       <div className="topbar-context">
-        <Button aria-label="Abrir menu" className="menu-button" icon={<Menu size={18} />} onClick={onOpenMenu} size="icon" variant="ghost" />
-        <div className="topbar-mobile-logo"><FocusLogo compact /></div>
-        <div className="breadcrumb"><span>FocusEdu</span><i>/</i><strong>{titles[activeView]}</strong></div>
+        <Button
+          aria-label="Abrir menu"
+          className="menu-button"
+          icon={<Menu size={18} />}
+          onClick={onOpenMenu}
+          size="icon"
+          variant="ghost"
+        />
+        <button
+          aria-label="Ir para Dashboard"
+          className="topbar-mobile-logo logo-home"
+          onClick={() => onNavigate('dashboard')}
+          title="Ir para Dashboard"
+        >
+          <FocusLogo compact />
+        </button>
+        <div className="breadcrumb">
+          <button onClick={() => onNavigate('dashboard')} type="button">
+            FocusAcademy
+          </button>
+          <i>/</i>
+          <strong>{titles[activeView]}</strong>
+        </div>
       </div>
       <div className="topbar-actions">
-        <label className="global-search">
-          <Search aria-hidden="true" size={16} />
-          <span className="sr-only">Buscar projetos</span>
-          <input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Buscar projetos..." />
-        </label>
-        <Button className="topbar-create" icon={<Plus size={17} />} onClick={onCreate} variant="primary">Criar projeto</Button>
-        <img className="topbar-avatar" src={profileAvatar} alt="Seu perfil" />
+        <ProjectSearch
+          onQueryChange={onQueryChange}
+          onSelect={onSelectProject}
+          onViewAll={onViewAllSearch}
+          projects={projects}
+          query={query}
+        />
+        <Button
+          className="topbar-create"
+          icon={<Plus size={17} />}
+          onClick={onCreate}
+          variant="primary"
+        >
+          Criar projeto
+        </Button>
+        <UserMenu
+          profile={profile}
+          onProfile={() => onNavigate('profile')}
+          onEdit={onEditProfile}
+          onSignOut={onSignOut}
+        />
       </div>
     </header>
   );

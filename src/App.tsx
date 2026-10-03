@@ -1,218 +1,589 @@
 import { Check, X } from 'lucide-react';
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from 'react';
+import type { Session } from '@supabase/supabase-js';
 import { AppShell } from './components/layout/AppShell';
 import { JoinProjectModal } from './components/projects/JoinProjectModal';
+import { ProjectPlanModal } from './components/projects/ProjectPlanModal';
 import { Button } from './components/ui/Button';
-import { initialState } from './data/seed';
+import { displayProject, displayTemplate } from './domain/projectDisplay';
+import { appearsInCatalogue } from './domain/projectLifecycle';
+import { validProjectPlan } from './domain/projectSchedule';
+import { AuthPage } from './pages/AuthPage';
 import { CatalogPage } from './pages/CatalogPage';
 import { CreateProjectPage } from './pages/CreateProjectPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { MyProjectsPage } from './pages/MyProjectsPage';
 import { ProfilePage } from './pages/ProfilePage';
-import { loadHubState, resetHubState, saveHubState } from './storage';
-import type { Filters, HubState, MemberProfile, Project } from './types';
-import { toList } from './utils/format';
+import { friendlyAuthError, getSession, signOut, watchSession } from './services/authService';
+import { useDiscordIntegration } from './services/useDiscordIntegration';
+import { getEvidence } from './services/evidenceService';
+import { getSkillSuggestions, getProfile, updateProfile } from './services/profileService';
+import { deleteAvatar, ownAvatarPath, uploadAvatar } from './services/avatarService';
+import {
+  createCommunityProject,
+  createProjectFromTemplate,
+  decideProjectJoinRequest,
+  getMyGamification,
+  getProjects,
+  requestProjectJoin,
+  leaveProject,
+  replicateProject,
+  resubmitProject,
+  transitionProject,
+  updateProject,
+} from './services/projectService';
+import { getPlatformAccount } from './services/adminService';
+import { friendlyProjectError } from './services/projectErrors';
+import { processDiscordEvents } from './services/discordService';
+import { getTemplates } from './services/templateService';
+import type {
+  Filters,
+  GamificationProgress,
+  MemberProfile,
+  PlatformAccount,
+  Project,
+  ProjectTemplate,
+} from './types';
 import { collectProjectOptions, createEmptyFilters, filterProjects } from './utils/projectFilters';
-import { defaultProjectForm, type ProjectFormState, type ToastMessage, type View } from './viewTypes';
+import {
+  defaultProjectForm,
+  type ProjectFormState,
+  type ToastMessage,
+  type View,
+} from './viewTypes';
 
-const defaultJoinIntent = 'Quero contribuir com entregas práticas, documentação e revisão da solução.';
+const defaultJoinIntent =
+  'Quero contribuir com entregas práticas, documentação e revisão da solução.';
+
+const AdminPage = lazy(() =>
+  import('./pages/AdminPage').then((module) => ({ default: module.AdminPage })),
+);
 
 function App() {
-  const [state, setState] = useState<HubState>(() => loadHubState());
-  const [activeView, setActiveView] = useState<View>('dashboard');
-  const [filters, setFilters] = useState<Filters>(() => createEmptyFilters());
-  const [selectedProjectId, setSelectedProjectId] = useState(state.projects[0]?.id ?? '');
+  const [session, setSession] = useState<Session | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [passwordRecovery, setPasswordRecovery] = useState(false);
+  const [profile, setProfile] = useState<MemberProfile | null>(null);
+  const [account, setAccount] = useState<PlatformAccount | null>(null);
+  const [gamification, setGamification] = useState<GamificationProgress | null>(null);
+  const [authRevision, setAuthRevision] = useState(0);
+  const [profileDraft, setProfileDraft] = useState<MemberProfile | null>(null);
+  const [templates, setTemplates] = useState<ProjectTemplate[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [skillOptions, setSkillOptions] = useState<{
+    technologies: string[];
+    areas: string[];
+  }>({ technologies: [], areas: [] });
+  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [activeView, setActiveView] = useState<View>(() =>
+    new URLSearchParams(window.location.search).has('project')
+      ? 'catalog'
+      : new URLSearchParams(window.location.search).get('view') === 'profile'
+        ? 'profile'
+        : 'dashboard',
+  );
+  const [filters, setFilters] = useState<Filters>(createEmptyFilters);
+  const [selectedId, setSelectedId] = useState(
+    () => new URLSearchParams(window.location.search).get('project') ?? '',
+  );
   const [joinProjectId, setJoinProjectId] = useState<string>();
-  const [joinRole, setJoinRole] = useState(state.profile.primaryRole);
-  const [joinIntent, setJoinIntent] = useState(defaultJoinIntent);
+  const [creationSourceId, setCreationSourceId] = useState<string>();
   const [projectForm, setProjectForm] = useState<ProjectFormState>(defaultProjectForm);
-  const [profileDraft, setProfileDraft] = useState<MemberProfile>(state.profile);
   const [toast, setToast] = useState<ToastMessage | null>(null);
+  const [profileEditRequest, setProfileEditRequest] = useState(0);
+  const [discordRefresh, setDiscordRefresh] = useState(0);
+  const sessionUserRef = useRef<string | undefined>(undefined);
+  const actionInFlight = useRef(false);
+  const userId = session?.user.id;
+  const discord = useDiscordIntegration(userId, authRevision, activeView === 'profile');
+  const discordConnected = discord.connected;
+  sessionUserRef.current = userId;
 
-  useEffect(() => saveHubState(state), [state]);
-  useEffect(() => setProfileDraft(state.profile), [state.profile]);
+  useEffect(() => {
+    if (activeView !== 'catalog') {
+      setSelectedId('');
+      const url = new URL(window.location.href);
+      url.searchParams.delete('project');
+      window.history.replaceState(null, '', url);
+    }
+  }, [activeView]);
+
+  useEffect(() => {
+    let active = true;
+    try {
+      const unsubscribe = watchSession((next, event) => {
+        if (active) {
+          if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true);
+          if (event === 'SIGNED_OUT') setPasswordRecovery(false);
+          setSession(next);
+          setAuthRevision((revision) => revision + 1);
+          setAuthReady(true);
+        }
+      });
+      getSession()
+        .then((next) => {
+          if (active) {
+            setSession(next);
+            setAuthReady(true);
+          }
+        })
+        .catch((cause) => {
+          if (active) {
+            setError(friendlyAuthError(cause));
+            setAuthReady(true);
+          }
+        });
+      return () => {
+        active = false;
+        unsubscribe();
+      };
+    } catch (cause) {
+      setError(friendlyAuthError(cause));
+      setAuthReady(true);
+    }
+  }, []);
+
+  const reload = useCallback(async (userId: string) => {
+    const [nextTemplates, nextProjects, evidence, nextSkills, nextAccount, nextGamification] =
+      await Promise.all([
+        getTemplates(),
+        getProjects(),
+        getEvidence(userId),
+        getSkillSuggestions(),
+        getPlatformAccount(userId),
+        getMyGamification().catch(() => null),
+      ]);
+    const nextProfile = await getProfile(userId, evidence);
+    if (sessionUserRef.current !== userId) return;
+    setTemplates(nextTemplates);
+    setProjects(nextProjects);
+    setSkillOptions(nextSkills);
+    setProfile(nextProfile);
+    setProfileDraft(nextProfile);
+    setAccount(nextAccount);
+    setGamification(nextGamification);
+  }, []);
+
+  useEffect(() => {
+    if (!userId) {
+      setProfile(null);
+      setProfileDraft(null);
+      setAccount(null);
+      setGamification(null);
+      setProjects([]);
+      setTemplates([]);
+      return;
+    }
+    let active = true;
+    setLoading(true);
+    setError('');
+    reload(userId)
+      .catch(() => {
+        if (active) setError('Não foi possível carregar os dados. Tente novamente.');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [userId, reload]);
+
   useEffect(() => {
     if (!toast) return;
     const timer = window.setTimeout(() => setToast(null), 4200);
     return () => window.clearTimeout(timer);
   }, [toast]);
 
-  const selectedProject = state.projects.find((project) => project.id === selectedProjectId) ?? state.projects[0];
-  const joinProject = state.projects.find((project) => project.id === joinProjectId);
-  const visibleProjects = useMemo(() => filterProjects(state.projects, filters), [state.projects, filters]);
-  const projectOptions = useMemo(() => collectProjectOptions(state.projects), [state.projects]);
-  const currentProjects = state.projects.filter((project) => project.members.some((member) => member.memberId === state.profile.id));
+  const catalogue = useMemo(() => {
+    const templateById = new Map(templates.map((item) => [item.id, item]));
+    return [
+      ...templates.map(displayTemplate),
+      ...projects.map((item) =>
+        displayProject(item, item.templateId ? templateById.get(item.templateId) : undefined),
+      ),
+    ];
+  }, [templates, projects]);
+  const operationalCatalogue = useMemo(
+    () => catalogue.filter((item) => appearsInCatalogue(item, profile?.id)),
+    [catalogue, profile?.id],
+  );
+  const visibleProjects = useMemo(
+    () => filterProjects(operationalCatalogue, filters),
+    [operationalCatalogue, filters],
+  );
+  const selectedProject = catalogue.find((item) => item.id === selectedId);
+  const joinTarget = catalogue.find((item) => item.id === joinProjectId);
+  const creationSource = catalogue.find((item) => item.id === creationSourceId);
+  const projectOptions = useMemo(() => collectProjectOptions(catalogue), [catalogue]);
 
   const showToast = (title: string, message: string) => setToast({ title, message });
-
-  const updateFilters = <Key extends keyof Filters>(key: Key, value: Filters[Key]) => {
+  const updateFilters = <Key extends keyof Filters>(key: Key, value: Filters[Key]) =>
     setFilters((current) => ({ ...current, [key]: value }));
-  };
-
-  const navigate = (view: View) => setActiveView(view);
-
-  const selectProject = (projectId: string) => {
-    setSelectedProjectId(projectId);
+  const selectProject = (id: string) => {
+    setSelectedId(id);
     setActiveView('catalog');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    const url = new URL(window.location.href);
+    url.searchParams.set('project', id);
+    window.history.replaceState(null, '', url);
   };
 
-  const requestJoin = (projectId: string) => {
-    const project = state.projects.find((item) => item.id === projectId);
-    if (!project) return;
-    if (project.members.some((member) => member.memberId === state.profile.id)) {
-      showToast('Você já está na squad', 'Abra Meus projetos para acompanhar sua participação.');
-      return;
+  const runAction = async (
+    action: () => Promise<void>,
+    title: string,
+    message: string,
+  ): Promise<boolean> => {
+    if (actionInFlight.current || !session) return false;
+    actionInFlight.current = true;
+    setBusy(true);
+    try {
+      await action();
+      await reload(session.user.id);
+      showToast(title, message);
+      return true;
+    } catch (cause) {
+      showToast(
+        'Ação não concluída',
+        friendlyProjectError(cause instanceof Error ? cause.message : 'Tente novamente.'),
+      );
+      return false;
+    } finally {
+      actionInFlight.current = false;
+      setBusy(false);
     }
-    if (project.members.length >= project.memberLimit) {
-      showToast('Squad completa', 'Use este projeto como template para formar uma nova squad.');
-      return;
-    }
-    setJoinProjectId(projectId);
   };
 
-  const joinSelectedProject = (projectId: string, role: string, intent: string) => {
-    const project = state.projects.find((item) => item.id === projectId);
-    if (!project) {
-      showToast('Projeto indisponível', 'Não foi possível encontrar este projeto.');
+  const requestJoin = () => {
+    if (
+      !selectedProject ||
+      selectedProject.kind !== 'project' ||
+      selectedProject.status !== 'FORMING' ||
+      !profile
+    )
       return;
-    }
-    if (project.members.some((member) => member.memberId === state.profile.id)) {
-      showToast('Você já está na squad', 'Sua participação continua registrada em Meus projetos.');
-      return;
-    }
-    if (project.members.length >= project.memberLimit) {
-      showToast('Squad completa', 'As vagas deste projeto foram preenchidas.');
-      return;
-    }
-
-    const joinedAt = new Date().toISOString();
-    setState((current) => ({
-      ...current,
-      profile: {
-        ...current.profile,
-        currentProjectIds: Array.from(new Set([...current.profile.currentProjectIds, project.id])),
-        evidence: [{ id: `evidence-${project.id}-${Date.now()}`, label: `Entrou no projeto ${project.name} como ${role}`, projectId: project.id, technology: project.suggestedTechnologies[0], recordedAt: joinedAt }, ...current.profile.evidence]
+    if (selectedProject.members.some((member) => member.memberId === profile.id)) return;
+    if (selectedProject.members.length >= selectedProject.memberLimit) return;
+    setJoinProjectId(selectedProject.id);
+  };
+  const connectDiscord = () => void discord.connect();
+  const joinSelectedProject = (id: string, role: string, intent: string) =>
+    void runAction(
+      async () => {
+        await requestProjectJoin(id, role, intent);
+        setJoinProjectId(undefined);
       },
-      projects: current.projects.map((item) => item.id === project.id ? {
-        ...item,
-        status: item.status === 'Aberto' ? 'Em formação' : item.status,
-        members: [...item.members, { memberId: current.profile.id, name: current.profile.name, avatarUrl: current.profile.avatarUrl, role, contributionIntent: intent, joinedAt }]
-      } : item)
-    }));
-    setJoinRole(role);
-    setJoinIntent(intent);
-    showToast('Entrada registrada', `Você entrou em ${project.name} como ${role}.`);
-  };
-
-  const reuseTemplate = (projectId: string) => {
-    const source = state.projects.find((project) => project.id === projectId);
-    if (!source) {
-      showToast('Template indisponível', 'Não foi possível localizar o projeto selecionado.');
-      return;
-    }
-
-    const reusedAt = new Date().toISOString();
-    const originTemplateId = source.originTemplateId ?? source.id;
-    const projectNumber = state.projects.filter((project) => project.originTemplateId === originTemplateId).length + 1;
-    const newProject: Project = {
-      ...source,
-      id: `community-${source.id}-${Date.now()}`,
-      name: `${source.name} - Squad ${projectNumber}`,
-      status: 'Em formação',
-      type: 'Community Project',
-      createdBy: state.profile.name,
-      originTemplateId,
-      members: [{ memberId: state.profile.id, name: state.profile.name, avatarUrl: state.profile.avatarUrl, role: state.profile.primaryRole, contributionIntent: 'Iniciou a squad a partir de um template Focus.', joinedAt: reusedAt }]
-    };
-
-    setState((current) => ({
-      ...current,
-      profile: {
-        ...current.profile,
-        currentProjectIds: Array.from(new Set([...current.profile.currentProjectIds, newProject.id])),
-        evidence: [{ id: `evidence-reuse-${Date.now()}`, label: `Originou uma nova squad a partir de ${source.name}`, projectId: newProject.id, recordedAt: reusedAt }, ...current.profile.evidence]
+      'Solicitação enviada',
+      `O líder da squad vai analisar sua solicitação para atuar como ${role}.`,
+    );
+  const decideJoinRequest = (requestId: string, decision: 'APPROVED' | 'REJECTED') =>
+    runAction(
+      () => decideProjectJoinRequest(requestId, decision),
+      decision === 'APPROVED' ? 'Solicitação aprovada' : 'Solicitação rejeitada',
+      decision === 'APPROVED'
+        ? 'A pessoa agora faz parte da squad.'
+        : 'A solicitação foi encerrada.',
+    );
+  const reuse = (id: string) => setCreationSourceId(id);
+  const confirmReuse = (role: string, start?: string, end?: string): Promise<boolean> => {
+    if (!creationSource) return Promise.resolve(false);
+    return runAction(
+      async () => {
+        const id =
+          creationSource.kind === 'template'
+            ? await createProjectFromTemplate(creationSource.id, role, start, end)
+            : await replicateProject(creationSource.id, role, start, end);
+        selectProject(id);
       },
-      projects: [newProject, ...current.projects]
-    }));
-    setSelectedProjectId(newProject.id);
-    setActiveView('catalog');
-    showToast('Template reutilizado', 'Uma nova squad comunitária foi criada e adicionada aos seus projetos.');
+      'Projeto criado',
+      'Uma nova squad foi criada e adicionada aos seus projetos.',
+    );
   };
-
-  const createCommunityProject = (event: FormEvent<HTMLFormElement>) => {
+  const create = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const createdAt = new Date().toISOString();
-    const project: Project = {
-      id: `community-project-${Date.now()}`,
-      name: projectForm.name.trim(),
-      shortDescription: projectForm.shortDescription.trim(),
-      category: projectForm.category.trim() || 'Comunidade',
-      status: 'Em formação',
-      memberLimit: projectForm.memberLimit,
-      suggestedTechnologies: toList(projectForm.suggestedTechnologies),
-      recommendedAreas: toList(projectForm.recommendedAreas),
-      difficulty: projectForm.difficulty,
-      suggestedDuration: projectForm.suggestedDuration.trim(),
-      type: 'Community Project',
-      suggestedRoles: toList(projectForm.recommendedAreas).map((role) => ({ role, amount: 1 })),
-      possibleStacks: toList(projectForm.possibleStacks),
-      outcomes: toList(projectForm.outcomes),
-      createdBy: state.profile.name,
-      members: [{ memberId: state.profile.id, name: state.profile.name, avatarUrl: state.profile.avatarUrl, role: state.profile.primaryRole, contributionIntent: 'Criou o projeto e está formando a squad inicial.', joinedAt: createdAt }]
-    };
-
-    if (!project.name || !project.shortDescription) {
-      showToast('Dados obrigatórios', 'Informe pelo menos nome e descrição curta para criar o projeto.');
+    if (
+      !projectForm.name.trim() ||
+      !projectForm.shortDescription.trim() ||
+      !projectForm.ownerParticipationRole ||
+      !projectForm.recommendedAreas
+        .split(',')
+        .map((area) => area.trim())
+        .includes(projectForm.ownerParticipationRole) ||
+      !validProjectPlan(projectForm)
+    )
       return;
-    }
-
-    setState((current) => ({
-      ...current,
-      profile: {
-        ...current.profile,
-        currentProjectIds: Array.from(new Set([...current.profile.currentProjectIds, project.id])),
-        evidence: [{ id: `evidence-create-${Date.now()}`, label: `Criou o projeto comunitário ${project.name}`, projectId: project.id, recordedAt: createdAt }, ...current.profile.evidence]
+    void runAction(
+      async () => {
+        selectProject(await createCommunityProject(projectForm));
+        setProjectForm(defaultProjectForm);
       },
-      projects: [project, ...current.projects]
-    }));
-    setProjectForm(defaultProjectForm);
-    setSelectedProjectId(project.id);
-    setActiveView('catalog');
-    showToast('Projeto criado', 'Seu projeto comunitário já aparece no catálogo.');
+      'Projeto criado',
+      'Seu projeto aguarda revisão e já aparece em Meus projetos.',
+    );
   };
-
-  const saveProfile = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setState((current) => ({ ...current, profile: profileDraft }));
-    setJoinRole(profileDraft.primaryRole);
-    showToast('Perfil atualizado', 'Suas áreas e tecnologias foram salvas.');
+  const saveProfile = async (file?: File): Promise<boolean> => {
+    if (!profileDraft || !profile) return false;
+    return runAction(
+      async () => {
+        let uploaded: Awaited<ReturnType<typeof uploadAvatar>> | undefined;
+        const oldPath = ownAvatarPath(profile.avatarUrl, profile.id);
+        try {
+          if (file) uploaded = await uploadAvatar(profile.id, file);
+          await updateProfile({
+            ...profileDraft,
+            avatarUrl: uploaded?.url ?? profileDraft.avatarUrl,
+          });
+        } catch (cause) {
+          if (uploaded) await deleteAvatar(uploaded.path).catch(() => {});
+          throw cause;
+        }
+        if (oldPath && (uploaded || !profileDraft.avatarUrl))
+          await deleteAvatar(oldPath).catch(() => {});
+      },
+      'Perfil atualizado',
+      'Suas informações foram salvas.',
+    );
   };
+  const editProject = (id: string, input: Parameters<typeof updateProject>[1]) =>
+    runAction(
+      () => updateProject(id, input),
+      'Projeto atualizado',
+      projects.find((item) => item.id === id)?.moderationStatus === 'APPROVED' &&
+        projects.find((item) => item.id === id)?.origin !== 'template'
+        ? 'Alterações salvas. O projeto voltou para revisão.'
+        : 'As informações da squad foram salvas.',
+    );
+  const changeProjectStatus = (
+    id: string,
+    target: Parameters<typeof transitionProject>[1],
+    details: Parameters<typeof transitionProject>[2],
+  ) =>
+    runAction(
+      async () => {
+        await transitionProject(id, target, details);
+        void processDiscordEvents(id)
+          .then(() => {
+            setDiscordRefresh((value) => value + 1);
+            if (session) void reload(session.user.id).catch(() => {});
+          })
+          .catch(() => {});
+      },
+      'Projeto atualizado',
+      target === 'ACTIVE'
+        ? 'A squad iniciou o projeto.'
+        : target === 'COMPLETED'
+          ? 'Conclusão e evidências registradas.'
+          : target === 'CANCELLED'
+            ? 'O projeto foi cancelado.'
+            : 'O projeto foi arquivado.',
+    );
+  const signOutUser = () =>
+    void signOut().catch((cause) => showToast('Não foi possível sair', friendlyAuthError(cause)));
 
-  const restoreSeed = () => {
-    resetHubState();
-    setState(initialState);
-    setProfileDraft(initialState.profile);
-    setSelectedProjectId(initialState.projects[0].id);
-    setFilters(createEmptyFilters());
-    setActiveView('dashboard');
-    showToast('Dados restaurados', 'O FocusEdu voltou ao estado inicial de demonstração.');
+  if (!authReady) return <main className="app-loading">Carregando FocusAcademy...</main>;
+  if (error && !session)
+    return (
+      <main className="app-loading">
+        <p>{error}</p>
+        <Button onClick={() => window.location.reload()}>Tentar novamente</Button>
+      </main>
+    );
+  if (!session) return <AuthPage />;
+  if (passwordRecovery) return <AuthPage recovery onRecovered={() => setPasswordRecovery(false)} />;
+  if (error)
+    return (
+      <main className="app-loading">
+        <p>{error}</p>
+        <Button
+          onClick={() => {
+            setError('');
+            setLoading(true);
+            reload(session.user.id)
+              .catch(() => setError('Não foi possível carregar os dados. Tente novamente.'))
+              .finally(() => setLoading(false));
+          }}
+        >
+          Tentar novamente
+        </Button>
+      </main>
+    );
+  if (loading || !profile || !profileDraft || !account || profile.id !== session.user.id)
+    return <main className="app-loading">Carregando projetos...</main>;
+  if (account.account_status === 'SUSPENDED')
+    return (
+      <main className="app-loading">
+        <h1>Sua conta está temporariamente suspensa.</h1>
+        {account.suspension_reason && <p>{account.suspension_reason}</p>}
+        <Button onClick={signOutUser}>Sair</Button>
+      </main>
+    );
+  const navigate = (view: View) => {
+    if (view !== 'admin' || account.platform_role !== 'MEMBER') setActiveView(view);
   };
 
   return (
-    <AppShell activeView={activeView} filters={filters} onNavigate={navigate} onQueryChange={(query) => { updateFilters('query', query); setActiveView('catalog'); }} onRestore={restoreSeed} profile={state.profile}>
-      {activeView === 'dashboard' && <DashboardPage onNavigate={navigate} onSelectProject={selectProject} profile={state.profile} projects={state.projects} />}
-      {activeView === 'catalog' && <CatalogPage filters={filters} onChangeFilters={updateFilters} onClearFilters={() => setFilters(createEmptyFilters())} onCreate={() => navigate('create')} onJoin={() => selectedProject && requestJoin(selectedProject.id)} onReuse={reuseTemplate} onSelect={selectProject} profileId={state.profile.id} projectOptions={projectOptions} projects={visibleProjects} selectedProject={selectedProject} />}
-      {activeView === 'my-projects' && <MyProjectsPage allProjects={state.projects} onExplore={() => navigate('catalog')} onSelect={selectProject} profile={state.profile} projects={currentProjects} />}
-      {activeView === 'create' && <CreateProjectPage onFormChange={setProjectForm} onReuseTemplate={reuseTemplate} onSubmit={createCommunityProject} projectForm={projectForm} templates={state.projects.filter((project) => project.type === 'Focus Project')} />}
-      {activeView === 'profile' && <ProfilePage onChange={setProfileDraft} onSubmit={saveProfile} profile={profileDraft} projects={state.projects} />}
-
-      <JoinProjectModal defaultIntent={joinIntent} defaultRole={joinRole} onClose={() => setJoinProjectId(undefined)} onJoin={joinSelectedProject} open={Boolean(joinProject)} project={joinProject} />
+    <AppShell
+      activeView={activeView}
+      accountRole={account.platform_role}
+      filters={filters}
+      searchProjects={operationalCatalogue}
+      onNavigate={navigate}
+      onEditProfile={() => {
+        setActiveView('profile');
+        setProfileEditRequest((value) => value + 1);
+      }}
+      onQueryChange={(query) => updateFilters('query', query)}
+      onSelectSearchProject={(id) => {
+        setFilters(createEmptyFilters());
+        selectProject(id);
+      }}
+      onViewAllSearch={() => {
+        setFilters((current) => ({
+          ...createEmptyFilters(),
+          query: current.query,
+        }));
+        setActiveView('catalog');
+      }}
+      onSignOut={signOutUser}
+      profile={profile}
+    >
+      {activeView === 'dashboard' && (
+        <DashboardPage
+          onNavigate={setActiveView}
+          onSelectProject={selectProject}
+          profile={profile}
+          projects={catalogue}
+        />
+      )}
+      {activeView === 'catalog' && (
+        <CatalogPage
+          canManageDiscord={account.platform_role === 'ADMIN'}
+          discordRefresh={discordRefresh}
+          discord={discord}
+          busy={busy}
+          filters={filters}
+          onChangeFilters={updateFilters}
+          onClearFilters={() => setFilters(createEmptyFilters())}
+          onCreate={() => setActiveView('create')}
+          onJoin={requestJoin}
+          onConnectDiscord={connectDiscord}
+          onDecideJoinRequest={(requestId, decision) => void decideJoinRequest(requestId, decision)}
+          onLeave={(id) =>
+            void runAction(() => leaveProject(id), 'Participação encerrada', 'Você saiu da squad.')
+          }
+          onEdit={editProject}
+          onResubmit={(id) =>
+            runAction(
+              () => resubmitProject(id),
+              'Enviado para revisão',
+              'Seu projeto está aguardando análise.',
+            )
+          }
+          onTransition={changeProjectStatus}
+          onReuse={reuse}
+          onSelect={selectProject}
+          onCloseDetail={() => {
+            setSelectedId('');
+            const url = new URL(window.location.href);
+            url.searchParams.delete('project');
+            window.history.replaceState(null, '', url);
+          }}
+          profileId={profile.id}
+          discordConnected={discordConnected}
+          projectOptions={projectOptions}
+          projects={visibleProjects}
+          selectedProject={selectedProject}
+        />
+      )}
+      {activeView === 'my-projects' && (
+        <MyProjectsPage
+          allProjects={catalogue}
+          onExplore={() => setActiveView('catalog')}
+          onSelect={selectProject}
+          profile={profile}
+        />
+      )}
+      {activeView === 'create' && (
+        <CreateProjectPage
+          busy={busy}
+          onFormChange={setProjectForm}
+          onReuseTemplate={reuse}
+          onSubmit={create}
+          projectForm={projectForm}
+          areaOptions={skillOptions.areas}
+          templates={templates}
+        />
+      )}
+      {activeView === 'profile' && (
+        <ProfilePage
+          discord={discord}
+          busy={busy}
+          editRequest={profileEditRequest}
+          onCancel={() => setProfileDraft(profile)}
+          onChange={setProfileDraft}
+          onSubmit={saveProfile}
+          profile={profileDraft}
+          gamification={gamification}
+          savedProfile={profile}
+          projects={catalogue}
+          skillOptions={skillOptions}
+        />
+      )}
+      {activeView === 'admin' && account.platform_role !== 'MEMBER' && (
+        <Suspense fallback={<p role="status">Carregando administração...</p>}>
+          <AdminPage
+            role={account.platform_role}
+            onOpenProject={selectProject}
+            onChanged={() =>
+              void reload(session.user.id).catch(() =>
+                setError('Não foi possível carregar os dados. Tente novamente.'),
+              )
+            }
+          />
+        </Suspense>
+      )}
+      <JoinProjectModal
+        busy={busy}
+        defaultIntent={defaultJoinIntent}
+        defaultRole={profile.primaryRole}
+        onClose={() => setJoinProjectId(undefined)}
+        onJoin={joinSelectedProject}
+        open={Boolean(joinTarget)}
+        project={joinTarget}
+      />
+      <ProjectPlanModal
+        busy={busy}
+        name={creationSource?.name}
+        areas={creationSource?.recommendedAreas ?? []}
+        onClose={() => setCreationSourceId(undefined)}
+        onCreate={confirmReuse}
+      />
       {toast && (
         <div className="toast" role="status">
-          <span className="toast-icon"><Check size={17} /></span>
-          <div><strong>{toast.title}</strong><span>{toast.message}</span></div>
-          <Button aria-label="Fechar aviso" icon={<X size={15} />} onClick={() => setToast(null)} size="icon" variant="ghost" />
+          <span className="toast-icon">
+            <Check size={17} />
+          </span>
+          <div>
+            <strong>{toast.title}</strong>
+            <span>{toast.message}</span>
+          </div>
+          <Button
+            aria-label="Fechar aviso"
+            icon={<X size={15} />}
+            onClick={() => setToast(null)}
+            size="icon"
+            variant="ghost"
+          />
         </div>
       )}
     </AppShell>

@@ -1,53 +1,88 @@
 import { UsersRound } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { roleOptions } from '../../data/options';
-import type { Project } from '../../types';
+import type { ProjectDisplay } from '../../types';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 
-export function JoinProjectModal({ project, open, defaultRole, defaultIntent, onClose, onJoin }: {
-  project?: Project;
+export function JoinProjectModal({
+  project,
+  open,
+  defaultRole,
+  defaultIntent,
+  onClose,
+  onJoin,
+  busy = false,
+}: {
+  project?: ProjectDisplay;
   open: boolean;
   defaultRole: string;
   defaultIntent: string;
   onClose: () => void;
   onJoin: (projectId: string, role: string, intent: string) => void;
+  busy?: boolean;
 }) {
-  const [role, setRole] = useState(defaultRole);
+  const [role, setRole] = useState(
+    project?.recommendedAreas.includes(defaultRole) ? defaultRole : '',
+  );
   const [intent, setIntent] = useState(defaultIntent);
 
   useEffect(() => {
     if (open) {
-      setRole(defaultRole);
+      setRole(project?.recommendedAreas.includes(defaultRole) ? defaultRole : '');
       setIntent(defaultIntent);
     }
-  }, [defaultIntent, defaultRole, open, project?.id]);
+  }, [defaultIntent, defaultRole, open, project?.id, project?.recommendedAreas]);
 
   if (!project) return null;
 
   const confirm = () => {
-    if (!role) return;
+    if (!project.recommendedAreas.includes(role)) return;
     onJoin(project.id, role, intent);
-    onClose();
   };
 
   return (
-    <Modal open={open} title="Entrar no projeto" description={`Você está entrando na squad de ${project.name}.`} onClose={onClose}>
+    <Modal
+      open={open}
+      title="Solicitar entrada"
+      description={`Sua solicitação será enviada ao líder da squad de ${project.name}.`}
+      onClose={onClose}
+    >
       <div className="join-modal-body">
         <p className="modal-prompt">Como você pretende contribuir nesta squad?</p>
         <label className="field">
-          <span>Função principal <em>Obrigatória</em></span>
+          <span>
+            Função principal <em>Obrigatória</em>
+          </span>
           <select required value={role} onChange={(event) => setRole(event.target.value)}>
-            {roleOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+            <option value="">Selecione uma função permitida</option>
+            {project.recommendedAreas.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
           </select>
         </label>
         <label className="field">
           <span>Intenção de contribuição</span>
-          <textarea rows={4} value={intent} onChange={(event) => setIntent(event.target.value)} placeholder="Conte brevemente onde pretende colaborar." />
+          <textarea
+            rows={4}
+            value={intent}
+            onChange={(event) => setIntent(event.target.value)}
+            placeholder="Conte brevemente onde pretende colaborar."
+          />
         </label>
         <div className="modal-actions">
-          <Button onClick={onClose}>Cancelar</Button>
-          <Button disabled={!role} icon={<UsersRound size={17} />} onClick={confirm} variant="primary">Entrar na squad</Button>
+          <Button disabled={busy} onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button
+            disabled={busy || !project.recommendedAreas.includes(role)}
+            icon={<UsersRound size={17} />}
+            onClick={confirm}
+            variant="primary"
+          >
+            {busy ? 'Enviando...' : 'Solicitar entrada'}
+          </Button>
         </div>
       </div>
     </Modal>

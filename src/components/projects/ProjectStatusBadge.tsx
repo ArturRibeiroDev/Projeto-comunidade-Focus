@@ -1,24 +1,37 @@
-import type { ProjectStatus, ProjectType } from '../../types';
+import type { ModerationStatus, ProjectStatus, ProjectType } from '../../types';
+import { projectStatusLabels } from '../../domain/projectLifecycle';
 import { Badge, type BadgeTone } from '../ui/Badge';
 
 const statusTone: Record<ProjectStatus, BadgeTone> = {
-  Aberto: 'green',
-  'Em formação': 'sky',
-  'Em andamento': 'amber',
-  Concluído: 'zinc'
-};
-
-const statusLabel: Record<ProjectStatus, string> = {
-  Aberto: 'Aberto',
-  'Em formação': 'Formando squad',
-  'Em andamento': 'Em andamento',
-  Concluído: 'Concluído'
+  FORMING: 'sky',
+  ACTIVE: 'amber',
+  COMPLETED: 'zinc',
+  CANCELLED: 'zinc',
+  ARCHIVED: 'zinc',
 };
 
 export function ProjectStatusBadge({ status }: { status: ProjectStatus }) {
-  return <Badge tone={statusTone[status]}><i className="status-dot" aria-hidden="true" />{statusLabel[status]}</Badge>;
+  return (
+    <Badge tone={statusTone[status]}>
+      <i className="status-dot" aria-hidden="true" />
+      {projectStatusLabels[status]}
+    </Badge>
+  );
 }
 
 export function ProjectTypeBadge({ type }: { type: ProjectType }) {
-  return <Badge tone={type === 'Focus Project' ? 'orange' : 'violet'}>{type}</Badge>;
+  return (
+    <Badge tone={type === 'Focus Project' ? 'orange' : 'violet'}>
+      {type === 'Focus Project' ? 'Focus Idea' : type}
+    </Badge>
+  );
+}
+
+export function ModerationBadge({ status }: { status?: ModerationStatus }) {
+  if (!status || status === 'APPROVED') return null;
+  return (
+    <Badge tone={status === 'PENDING' ? 'amber' : 'zinc'}>
+      {status === 'PENDING' ? 'Aguardando revisão' : 'Projeto não aprovado'}
+    </Badge>
+  );
 }

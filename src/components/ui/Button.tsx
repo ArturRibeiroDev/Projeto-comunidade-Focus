@@ -19,7 +19,11 @@ export function Button({
   ...props
 }: ButtonProps) {
   return (
-    <button className={`button button-${variant} button-${size} ${className}`.trim()} type={type} {...props}>
+    <button
+      className={`button button-${variant} button-${size} ${className}`.trim()}
+      type={type}
+      {...props}
+    >
       {icon}
       {children}
     </button>

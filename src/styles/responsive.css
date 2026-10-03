@@ -4,13 +4,7 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .catalog-layout {
-    grid-template-columns: minmax(0, 1fr) 350px;
-  }
-
-  .catalog-layout .project-grid {
-    grid-template-columns: 1fr;
-  }
+  .catalog-layout .project-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 1120px) {
@@ -29,6 +23,7 @@
   .profile-layout {
     grid-template-columns: 1fr;
   }
+  .profile-layout-read { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 1023px) {
@@ -47,6 +42,10 @@
   .sidebar.compact .sidebar-brand {
     justify-content: space-between;
     padding: 0 20px;
+  }
+
+  .sidebar-brand .expanded-logo {
+    width: calc(100% - 44px);
   }
 
   .sidebar.compact .expanded-logo {
@@ -85,6 +84,7 @@
   .sidebar-toggle {
     display: none !important;
   }
+  .sidebar-resize-handle { display: none; }
 
   .mobile-close,
   .menu-button,
@@ -112,20 +112,6 @@
     padding: 0 20px;
   }
 
-  .catalog-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .catalog-main {
-    grid-row: 2;
-  }
-
-  .project-detail {
-    position: static;
-    grid-row: 1;
-    max-height: none;
-  }
-
   .catalog-layout .project-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -142,8 +128,7 @@
     padding: 0 13px;
   }
 
-  .breadcrumb,
-  .topbar-mobile-logo {
+  .breadcrumb {
     display: none !important;
   }
 
@@ -158,11 +143,15 @@
   }
 
   .global-search {
-    width: min(100%, 210px);
+    width: 100%;
   }
+
+  .global-search-wrap { width: min(100%, 210px); flex: 1 1 auto; }
+  .global-search-dropdown { position: fixed; top: 54px; right: 12px; left: 12px; width: auto; }
 
   .topbar-create {
     width: 34px;
+    min-height: 34px;
     padding: 0;
     gap: 0;
     font-size: 0;
@@ -204,6 +193,7 @@
   .structured-form {
     grid-template-columns: 1fr;
   }
+  .profile-edit-grid { grid-template-columns: 1fr; }
 
   .metric {
     min-height: 74px;
@@ -312,13 +302,11 @@
 }
 
 @media (max-width: 480px) {
-  .topbar-avatar {
-    display: none;
-  }
+  .my-project-entries { grid-template-columns: 1fr; }
+  .edit-form-grid { grid-template-columns: 1fr; }
+  .global-search-wrap { width: 100%; }
 
-  .global-search {
-    width: 100%;
-  }
+  .scroll-to-top { right: 16px; bottom: 68px; }
 
   .project-card-footer {
     align-items: flex-start;

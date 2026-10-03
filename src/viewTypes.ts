@@ -1,6 +1,6 @@
 import type { ProjectDifficulty } from './types';
 
-export type View = 'dashboard' | 'catalog' | 'my-projects' | 'create' | 'profile';
+export type View = 'dashboard' | 'catalog' | 'my-projects' | 'create' | 'profile' | 'admin';
 
 export type ToastMessage = {
   title: string;
@@ -14,7 +14,10 @@ export type ProjectFormState = {
   memberLimit: number;
   difficulty: ProjectDifficulty;
   suggestedDuration: string;
+  plannedStartDate: string;
+  plannedEndDate: string;
   recommendedAreas: string;
+  ownerParticipationRole: string;
   suggestedTechnologies: string;
   possibleStacks: string;
   outcomes: string;
@@ -26,9 +29,12 @@ export const defaultProjectForm: ProjectFormState = {
   category: '',
   memberLimit: 5,
   difficulty: 'Misto',
-  suggestedDuration: '4 a 6 semanas',
-  recommendedAreas: 'Backend, Frontend, UX/UI, QA',
+  suggestedDuration: '',
+  plannedStartDate: '',
+  plannedEndDate: '',
+  recommendedAreas: '',
+  ownerParticipationRole: '',
   suggestedTechnologies: 'TypeScript, React, Node.js',
   possibleStacks: 'Stack a definir pela squad',
-  outcomes: 'MVP navegável, README, apresentação final'
+  outcomes: 'MVP navegável, README, apresentação final',
 };

@@ -1,0 +1,7 @@
+# Local-only fixture: image control plus the fixed schema from upstream pg_cron v1.6.4.
+# Keeps the image's installed SQL version; used only inside the disposable container.
+default_version = '1.6.4'
+comment = 'Job scheduler for PostgreSQL'
+module_pathname = '$libdir/pg_cron'
+relocatable = false
+schema = pg_catalog

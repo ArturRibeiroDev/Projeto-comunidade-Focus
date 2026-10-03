@@ -17,7 +17,7 @@ export const roleOptions = [
   'Game Development',
   'Product',
   'Project Management',
-  'Outra'
+  'Outra',
 ];
 
 export const technologySuggestions = [
@@ -50,15 +50,14 @@ export const technologySuggestions = [
   'Playwright',
   'Cypress',
   'Godot',
-  'Unity'
+  'Unity',
 ];
 
 export const projectStatuses: Array<'Todos' | ProjectStatus> = [
   'Todos',
-  'Aberto',
-  'Em formação',
-  'Em andamento',
-  'Concluído'
+  'FORMING',
+  'ACTIVE',
+  'COMPLETED',
 ];
 
 export const projectDifficulties: Array<'Todas' | ProjectDifficulty> = [
@@ -66,11 +65,11 @@ export const projectDifficulties: Array<'Todas' | ProjectDifficulty> = [
   'Iniciante',
   'Intermediário',
   'Avançado',
-  'Misto'
+  'Misto',
 ];
 
 export const projectTypes: Array<'Todos' | ProjectType> = [
   'Todos',
   'Focus Project',
-  'Community Project'
+  'Community Project',
 ];
