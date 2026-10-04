@@ -71,7 +71,7 @@ export async function signInWithDiscord() {
   const { error } = await getSupabase().auth.signInWithOAuth({
     provider: 'discord',
     options: {
-      redirectTo: window.location.origin + window.location.pathname + window.location.search,
+      redirectTo: window.location.origin,
     },
   });
   if (error) throw error;
@@ -80,6 +80,8 @@ export async function signInWithDiscord() {
 export function friendlyAuthError(cause: unknown): string {
   const error = cause as { code?: string; message?: string } | null;
   const detail = `${error?.code ?? ''} ${error?.message ?? ''}`.toLowerCase();
+  if (/identity_already_exists|identity_conflict/.test(detail))
+    return 'Este Discord já está conectado a outra conta do FocusAcademy.';
   if (/invalid.*credentials|invalid login|email.*password|login credentials/.test(detail))
     return 'E-mail ou senha incorretos.';
   if (/already.*registered|user.*already|email.*exists|already been registered/.test(detail))

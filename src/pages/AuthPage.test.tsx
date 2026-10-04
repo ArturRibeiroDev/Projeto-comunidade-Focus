@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor, cleanup } from '@testing-library/re
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { AuthPage } from './AuthPage';
 
-const auth = vi.hoisted(() => ({ updateUser: vi.fn() }));
+const auth = vi.hoisted(() => ({ updateUser: vi.fn(), signInWithOAuth: vi.fn() }));
 vi.mock('../lib/supabase', () => ({ getSupabase: () => ({ auth }) }));
 beforeEach(() => {
   vi.clearAllMocks();
@@ -35,4 +35,34 @@ test('a rejected password update stays on recovery with a sanitized message', as
   );
   expect(recovered).not.toHaveBeenCalled();
   expect(screen.queryByText('internal-database-detail')).toBeNull();
+});
+
+test.each([
+  ['Entrar', 'Entrar com Discord'],
+  ['Criar conta', 'Criar conta com Discord'],
+])('starts Discord OAuth from the %s tab', async (tab, label) => {
+  auth.signInWithOAuth.mockResolvedValue({ error: null });
+  render(<AuthPage />);
+  if (tab === 'Criar conta') fireEvent.click(screen.getByRole('tab', { name: tab }));
+
+  fireEvent.click(screen.getByRole('button', { name: label }));
+  await waitFor(() =>
+    expect(auth.signInWithOAuth).toHaveBeenCalledWith({
+      provider: 'discord',
+      options: { redirectTo: window.location.origin },
+    }),
+  );
+});
+
+test('shows the specific message when this Discord belongs to another account', async () => {
+  auth.signInWithOAuth.mockResolvedValue({
+    error: { code: 'identity_already_exists', message: 'identity conflict' },
+  });
+  render(<AuthPage />);
+  fireEvent.click(screen.getByRole('button', { name: 'Entrar com Discord' }));
+  await waitFor(() =>
+    expect(screen.getByRole('status').textContent).toBe(
+      'Este Discord já está conectado a outra conta do FocusAcademy.',
+    ),
+  );
 });

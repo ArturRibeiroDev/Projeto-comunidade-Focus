@@ -114,7 +114,7 @@ export function AuthPage({
                     : 'Informe seu e-mail para receber o link de recuperação.'}
             </p>
           </div>
-          {!recovery && import.meta.env.VITE_DISCORD_AUTH_ENABLED === 'true' && (
+          {!recovery && mode !== 'recover' && (
             <>
               <Button
                 className="auth-discord"
@@ -122,7 +122,7 @@ export function AuthPage({
                 onClick={handleDiscordLogin}
                 variant="primary"
               >
-                Continuar com Discord
+                {mode === 'login' ? 'Entrar com Discord' : 'Criar conta com Discord'}
               </Button>
               <div className="auth-divider">
                 <span>ou</span>
@@ -142,6 +142,7 @@ export function AuthPage({
                 aria-selected={mode === 'login'}
                 aria-controls="auth-form"
                 tabIndex={mode === 'login' ? 0 : -1}
+                disabled={pending}
                 ref={loginTab}
                 className={mode === 'login' ? 'active' : ''}
                 onClick={() => selectMode('login')}
@@ -154,6 +155,7 @@ export function AuthPage({
                 aria-selected={mode === 'register'}
                 aria-controls="auth-form"
                 tabIndex={mode === 'register' ? 0 : -1}
+                disabled={pending}
                 ref={registerTab}
                 className={mode === 'register' ? 'active' : ''}
                 onClick={() => selectMode('register')}
