@@ -16,17 +16,17 @@ export function ProjectPlanModal({
   areas: string[];
   onCreate: (role: string, start?: string, end?: string) => Promise<boolean>;
 }) {
-  const [start, setStart] = useState('');
+  const [start, setStart] = useState(todayIsoDate);
   const [end, setEnd] = useState('');
   const [role, setRole] = useState('');
   const minPlanDate = todayIsoDate();
   const plan = { plannedStartDate: start, plannedEndDate: end };
   const planError = projectPlanError(plan);
   useEffect(() => {
-    setStart('');
+    setStart(todayIsoDate());
     setEnd('');
     setRole('');
-  }, [areas, name]);
+  }, [name]);
   if (!name) return null;
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

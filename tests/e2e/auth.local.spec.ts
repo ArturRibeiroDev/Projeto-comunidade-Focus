@@ -19,8 +19,8 @@ test('auth: sanitized failures, recovery request and responsive layout', async (
     }),
   );
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Entrar na FocusAcademy' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Continuar com Discord' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Entrar na Focus Academy' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Entrar com Discord' })).toBeVisible();
   await page.getByLabel('E-mail', { exact: true }).fill('rc@example.test');
   await page.getByLabel('Senha', { exact: true }).fill('invalid-test-password');
   await page.getByRole('button', { name: 'Mostrar senha' }).click();

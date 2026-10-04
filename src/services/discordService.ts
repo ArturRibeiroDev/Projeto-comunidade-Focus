@@ -66,6 +66,10 @@ export async function getProjectDiscordIntegration(projectId: string) {
   if (events.error) throw events.error;
   return {
     integration: integration.data as ProjectDiscordIntegration | null,
+    pendingEvent:
+      (events.data as DiscordEventStatus[]).find(
+        (event) => event.status === 'PENDING' || event.status === 'PROCESSING',
+      ) ?? null,
     failedEvent:
       (events.data as DiscordEventStatus[])[0]?.status === 'FAILED'
         ? (events.data as DiscordEventStatus[])[0]

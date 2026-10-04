@@ -62,7 +62,7 @@ test('shows the specific message when this Discord belongs to another account', 
   fireEvent.click(screen.getByRole('button', { name: 'Entrar com Discord' }));
   await waitFor(() =>
     expect(screen.getByRole('status').textContent).toBe(
-      'Este Discord já está conectado a outra conta do FocusAcademy.',
+      'Este Discord já está conectado a outra conta do Focus Academy.',
     ),
   );
 });

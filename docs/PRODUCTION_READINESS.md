@@ -247,6 +247,8 @@ Exportar envs do runner HTTP/E2E/load pelo armazenamento local/CI protegido. Loa
 
 ## Evidencia Local Final
 
+Rodada UX/estado: aplicar manualmente `202610040001_forming_member_management.sql` antes de publicar o frontend correspondente. Sem essa migration, os controles de membros retornam erro, não fazem fallback de escrita direta. `participation_roles_smoke.sql` cobre remoção por owner, auto-remoção negada, MEMBER sem permissão, função própria canônica, rejeição de texto arbitrário/escrita direta e bloqueios após ACTIVE. A migration não foi aplicada remotamente.
+
 PASS: npm run test; npm run lint; npm run format:check; npm run build; npm audit --audit-level=moderate; git diff --check; npm run test:db:rc; npm run test:e2e:types; npm run test:e2e -- --project=local; npm run scan:dist.
 
 PASS local-only: FOCUSEDU_SMOKE_LOCAL_ONLY=true FOCUSEDU_SMOKE_BASE_URL=http://localhost:4178 npm run smoke:production.

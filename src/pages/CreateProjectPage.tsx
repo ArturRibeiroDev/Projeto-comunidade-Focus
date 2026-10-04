@@ -1,4 +1,4 @@
-import { ArrowRight, BookTemplate, Save, Sparkles } from 'lucide-react';
+import { ArrowRight, BookTemplate, Save } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { projectDifficulties, technologySuggestions } from '../data/options';
 import type { ProjectTemplate, ProjectDifficulty } from '../types';
@@ -82,7 +82,6 @@ export function CreateProjectPage({
           onClick={() => setMode('community')}
           role="tab"
         >
-          <Sparkles size={20} />
           <span>
             <strong>Criar projeto comunitário</strong>
             <small>Publique uma ideia própria com áreas e tecnologias livres.</small>

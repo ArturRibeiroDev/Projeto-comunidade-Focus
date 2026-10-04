@@ -620,6 +620,7 @@
 .member-avatar-initials {
   width: 32px;
   height: 32px;
+  flex-shrink: 0;
   border: 1px solid var(--border);
   border-radius: 50%;
   object-fit: cover;
@@ -1227,9 +1228,28 @@
   width: 88px;
   height: 88px;
   border: 1px solid var(--border-hover);
-  border-radius: var(--radius-lg);
+  border-radius: 9999px;
   background: var(--surface-elevated);
   object-fit: cover;
+}
+
+.member-row > div {
+  min-width: 0;
+}
+
+.member-row .field select {
+  max-width: 100%;
+}
+
+.member-confirmation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.member-confirmation p {
+  flex-basis: 100%;
+  overflow-wrap: anywhere;
 }
 
 .profile-avatar-initials {

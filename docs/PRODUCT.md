@@ -14,6 +14,9 @@ Os escopos oficiais são registros `ProjectTemplate`; cada squad usa um `Project
 
 ## Squads e participação
 
+- Em `FORMING`, o owner pode remover outros membros com confirmação, nunca a si próprio. Cada membro, incluindo owner, pode alterar apenas sua própria função entre as áreas permitidas do projeto. Após iniciar, ambas as operações ficam bloqueadas. Ownership, evidências anteriores e regras de entrada permanecem intactos.
+- Novas execuções começam com a data local atual como planejamento sugerido, editável; conclusão continua opcional.
+
 - A composição da squad é livre. A composição sugerida é somente recomendação visual; nunca é requisito para entrar, criar ou conduzir um projeto.
 - A entrada em squads reais exige solicitação e aprovação do owner/líder. A pessoa escolhe a função pretendida e pode registrar sua intenção de contribuição na solicitação; somente após aprovação essa função vira participação no projeto.
 - Discord conectado é pré-requisito para solicitar entrada e para iniciar uma squad. O Discord ID confiável vem do Identity Linking do Supabase, nunca de username informado pelo cliente.

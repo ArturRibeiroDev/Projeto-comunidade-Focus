@@ -64,7 +64,7 @@ export function DashboardPage({
   return (
     <div className="page-stack">
       <PageHeader
-        eyebrow="FocusAcademy"
+        eyebrow="Focus Academy"
         title={`Olá, ${profile.name.split(' ')[0]}`}
         description="Acompanhe suas squads e encontre o próximo projeto para transformar conhecimento em prática."
         actions={

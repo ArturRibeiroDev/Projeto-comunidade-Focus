@@ -40,7 +40,7 @@ try {
   record('html root element', html.includes('<div id="root">'), 'root container present');
   record(
     'public branding',
-    html.includes('FocusAcademy') && !/FocusEdu|FOCUSEDU|Focus Edu/.test(html),
+    html.includes('Focus Academy') && !/FocusEdu|FOCUSEDU|Focus Edu/.test(html),
   );
   if (!localOnly) {
     for (const header of [

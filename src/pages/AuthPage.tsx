@@ -86,9 +86,9 @@ export function AuthPage({
   return (
     <main className="auth-screen">
       <div className="auth-layout">
-        <section className="auth-intro" aria-label="FocusAcademy">
+        <section className="auth-intro" aria-label="Focus Academy">
           <span className="auth-intro-mark">FOCUS TECNOLOGIA</span>
-          <h2>FocusAcademy</h2>
+          <h2>Focus Academy</h2>
           <p>Aprenda construindo projetos reais em equipe.</p>
           <span>Squads, portfólio e histórico profissional verificável em um só lugar.</span>
         </section>
@@ -99,7 +99,7 @@ export function AuthPage({
               {recovery
                 ? 'Definir nova senha'
                 : mode === 'login'
-                  ? 'Entrar na FocusAcademy'
+                  ? 'Entrar na Focus Academy'
                   : mode === 'register'
                     ? 'Criar conta'
                     : 'Recuperar senha'}

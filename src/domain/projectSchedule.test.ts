@@ -7,6 +7,12 @@ import {
 } from './projectSchedule';
 
 describe('project planning', () => {
+  it('uses the local calendar date near midnight, not the UTC date', () => {
+    const localLateNight = new Date(2026, 9, 4, 23, 59);
+    const localEarlyMorning = new Date(2026, 9, 4, 0, 1);
+    expect(todayIsoDate(localLateNight)).toBe('2026-10-04');
+    expect(todayIsoDate(localEarlyMorning)).toBe('2026-10-04');
+  });
   it('keeps template suggestions separate from execution dates', () => {
     expect(formatProjectDuration('template', '3 a 5 semanas', {})).toBe('');
     expect(formatProjectDuration('project', '3 a 5 semanas', {})).toBe('');

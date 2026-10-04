@@ -110,6 +110,7 @@ export function AdminPage({
   const [profileDetail, setProfileDetail] = useState<Record<string, unknown>>();
   const [editingTemplate, setEditingTemplate] = useState<string | null | undefined>();
   const [templateDraft, setTemplateDraft] = useState<TemplateDraft>(blankTemplate);
+  const projectReadRevision = useRef(0);
 
   const load = async (current: Tab) => {
     setLoading(true);
@@ -124,7 +125,11 @@ export function AdminPage({
         setDiscordOverview(nextDiscord);
       }
       if (current === 'users') setUsers(await getAdminUsers());
-      if (current === 'projects') setProjects(await getAdminProjects());
+      if (current === 'projects') {
+        const revision = ++projectReadRevision.current;
+        const nextProjects = await getAdminProjects();
+        if (revision === projectReadRevision.current) setProjects(nextProjects);
+      }
       if (current === 'templates') setTemplates(await getAdminTemplates());
       if (current === 'settings') setSettings(await getAdminSettings());
       if (current === 'audit') setAudit(await getAdminAudit());
@@ -136,6 +141,18 @@ export function AdminPage({
   };
   useEffect(() => {
     void load(tab);
+    const refreshModeration = () => {
+      if (tab === 'projects' && document.visibilityState !== 'hidden' && !actionInFlight.current) {
+        void load(tab);
+      }
+    };
+    window.addEventListener('focus', refreshModeration);
+    document.addEventListener('visibilitychange', refreshModeration);
+    return () => {
+      projectReadRevision.current += 1;
+      window.removeEventListener('focus', refreshModeration);
+      document.removeEventListener('visibilitychange', refreshModeration);
+    };
   }, [tab]);
 
   const act = async (operation: () => Promise<unknown>, success: string) => {
@@ -147,8 +164,8 @@ export function AdminPage({
     try {
       await operation();
       setNotice(success);
-      await load(tab);
       onChanged();
+      await load(tab);
     } catch {
       setError('Operação não concluída. Verifique os dados e sua permissão e tente novamente.');
     } finally {
@@ -242,7 +259,7 @@ export function AdminPage({
   return (
     <div className="page-stack admin-page">
       <PageHeader
-        eyebrow="FocusAcademy"
+        eyebrow="Focus Academy"
         title={role === 'MODERATOR' ? 'Moderação' : 'Administração'}
         description="Operações da plataforma e histórico de decisões."
       />

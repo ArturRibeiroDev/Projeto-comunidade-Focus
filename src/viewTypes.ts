@@ -1,4 +1,10 @@
 import type { ProjectDifficulty } from './types';
+import { todayIsoDate } from './domain/projectSchedule';
+
+export const createDefaultProjectForm = (): ProjectFormState => ({
+  ...defaultProjectForm,
+  plannedStartDate: todayIsoDate(),
+});
 
 export type View = 'dashboard' | 'catalog' | 'my-projects' | 'create' | 'profile' | 'admin';
 

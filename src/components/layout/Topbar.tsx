@@ -63,7 +63,7 @@ export function Topbar({
         </button>
         <div className="breadcrumb">
           <button onClick={() => onNavigate('dashboard')} type="button">
-            FocusAcademy
+            Focus Academy
           </button>
           <i>/</i>
           <strong>{titles[activeView]}</strong>

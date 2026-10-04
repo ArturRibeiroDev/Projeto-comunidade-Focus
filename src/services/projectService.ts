@@ -1,4 +1,20 @@
 import { getSupabase } from '../lib/supabase';
+
+export async function removeProjectMember(projectId: string, userId: string) {
+  const { error } = await getSupabase().rpc('remove_project_member', {
+    p_project_id: projectId,
+    p_user_id: userId,
+  });
+  if (error) throw error;
+}
+
+export async function updateMyProjectRole(projectId: string, role: string) {
+  const { error } = await getSupabase().rpc('update_my_project_role', {
+    p_project_id: projectId,
+    p_main_role: role,
+  });
+  if (error) throw error;
+}
 import { throwReadError } from './readError';
 import type { GamificationProgress, Project, SquadRecommendation } from '../types';
 import type { ProjectFormState } from '../viewTypes';

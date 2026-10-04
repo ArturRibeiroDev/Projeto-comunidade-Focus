@@ -316,11 +316,12 @@ describe('Discord identity linking UX', () => {
       );
     }
     render(<SplitState />);
-    await screen.findByText('Sincronização do canal pendente.');
+    await screen.findByText('Sincronizando canal Discord...');
     expect(screen.getByText('Conectado')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Sincronizar canal' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Tentar sincronizar novamente' })).toBeNull();
 
-    await screen.findByText('#squad', {}, { timeout: 4000 });
+    await screen.findByText('Canal Discord ativo', {}, { timeout: 4000 });
+    expect(screen.queryByRole('button', { name: 'Tentar sincronizar novamente' })).toBeNull();
     expect(screen.getByText('Conectado')).toBeTruthy();
     expect(mocks.getProjectDiscordIntegration).toHaveBeenCalledTimes(2);
   });
@@ -366,6 +367,6 @@ describe('Discord identity linking UX', () => {
     render(<SplitState />);
     await screen.findByText(/Falha ao sincronizar Discord/);
     expect(screen.getByText('Conectado')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Tentar novamente' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Tentar sincronizar novamente' })).toBeTruthy();
   });
 });

@@ -4,7 +4,7 @@ import { formatProjectDuration } from '../../domain/projectSchedule';
 import type { ProjectDisplay } from '../../types';
 import { formatDate } from '../../utils/format';
 import { Badge } from '../ui/Badge';
-import { ProjectMembers } from './ProjectMembers';
+import { ProjectMembers, type ProjectMembersProps } from './ProjectMembers';
 
 export type DetailTab = 'overview' | 'scope' | 'stack' | 'squad' | 'details' | 'delivery';
 
@@ -249,7 +249,7 @@ function StackAndAreas({ project }: { project: ProjectDisplay }) {
   );
 }
 
-function Squad({ project }: { project: ProjectDisplay }) {
+function Squad({ project, profileId, onMembersChanged }: ProjectMembersProps) {
   return (
     <>
       <DetailSection
@@ -259,7 +259,11 @@ function Squad({ project }: { project: ProjectDisplay }) {
         <p className="detail-note">
           <strong>Responsável:</strong> {project.ownerName ?? 'Responsável Focus'}
         </p>
-        <ProjectMembers project={project} />
+        <ProjectMembers
+          project={project}
+          profileId={profileId}
+          onMembersChanged={onMembersChanged}
+        />
       </DetailSection>
       {project.suggestedRoles.length > 0 && <Composition project={project} />}
     </>
@@ -370,15 +374,17 @@ export function ProjectDetailSections({
   project,
   tab,
   alreadyJoined,
-}: {
-  project: ProjectDisplay;
+  profileId,
+  onMembersChanged,
+}: ProjectMembersProps & {
   tab: DetailTab;
   alreadyJoined: boolean;
 }) {
   if (tab === 'overview') return <Overview project={project} alreadyJoined={alreadyJoined} />;
   if (tab === 'scope') return <Scope project={project} />;
   if (tab === 'stack') return <StackAndAreas project={project} />;
-  if (tab === 'squad') return <Squad project={project} />;
+  if (tab === 'squad')
+    return <Squad project={project} profileId={profileId} onMembersChanged={onMembersChanged} />;
   if (tab === 'details') return <ProjectDetails project={project} />;
   return <Delivery project={project} />;
 }

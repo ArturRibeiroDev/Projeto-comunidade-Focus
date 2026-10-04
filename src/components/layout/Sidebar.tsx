@@ -92,7 +92,7 @@ export function Sidebar({
         </div>
 
         <nav className="nav-list">
-          <p className="nav-label">FocusAcademy</p>
+          <p className="nav-label">Focus Academy</p>
           {navigation.map((item) => {
             const Icon = item.icon;
             const active = activeView === item.view;

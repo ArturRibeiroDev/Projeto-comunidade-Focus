@@ -118,7 +118,72 @@ begin
     where project_id = template_project and user_id = candidate and main_role = 'Backend') then
     raise exception 'Approval did not preserve validated role';
   end if;
+  perform public.update_my_project_role(template_project, 'Frontend');
+  if not exists (select 1 from public.projects where id = template_project and owner_id = template_owner) or
+     not exists (select 1 from public.project_members where project_id = template_project
+       and user_id = template_owner and main_role = 'Frontend') then
+    raise exception 'Role update changed ownership or removed owner membership';
+  end if;
+  begin
+    perform public.remove_project_member(template_project, template_owner);
+    raise exception 'Owner removed self';
+  exception when others then
+    if sqlerrm <> 'OWNER_CANNOT_LEAVE' then raise; end if;
+  end;
+  perform set_config('request.jwt.claim.sub', no_discord::text, true);
+  begin
+    perform public.update_my_project_role(template_project, 'Frontend');
+    raise exception 'Nonmember updated role';
+  exception when others then
+    if sqlerrm <> 'MEMBER_REQUIRED' then raise; end if;
+  end;
+  perform set_config('request.jwt.claim.sub', candidate::text, true);
+  perform public.update_my_project_role(template_project, 'Frontend');
+  if not exists (select 1 from public.project_members where project_id = template_project
+    and user_id = candidate and main_role = 'Frontend') then
+    raise exception 'Member role was not updated';
+  end if;
+  begin
+    perform public.update_my_project_role(template_project, 'arbitrary role');
+    raise exception 'Role update accepted arbitrary role';
+  exception when others then
+    if sqlerrm <> 'INVALID_PROJECT_ROLE' then raise; end if;
+  end;
+  begin
+    perform public.remove_project_member(template_project, template_owner);
+    raise exception 'Member removed another person';
+  exception when others then
+    if sqlerrm <> 'OWNER_REQUIRED' then raise; end if;
+  end;
+  begin
+    update public.project_members set main_role = 'arbitrary' where project_id = template_project;
+    raise exception 'Direct membership update allowed';
+  exception when insufficient_privilege then null;
+  end;
+  perform set_config('request.jwt.claim.sub', template_owner::text, true);
+  perform public.remove_project_member(template_project, candidate);
+  if exists (select 1 from public.project_members where project_id = template_project and user_id = candidate) then
+    raise exception 'Owner did not remove member';
+  end if;
+  -- Re-admit through the normal approval flow to exercise ACTIVE protections.
+  perform set_config('request.jwt.claim.sub', candidate::text, true);
+  request_id := public.request_project_join(template_project, 'Backend');
+  perform set_config('request.jwt.claim.sub', template_owner::text, true);
+  perform public.decide_project_join_request(request_id, 'APPROVED');
   perform public.transition_project(template_project, 'ACTIVE');
+  begin
+    perform public.remove_project_member(template_project, candidate);
+    raise exception 'Owner removed member after start';
+  exception when others then
+    if sqlerrm <> 'PROJECT_NOT_FORMING' then raise; end if;
+  end;
+  perform set_config('request.jwt.claim.sub', candidate::text, true);
+  begin
+    perform public.update_my_project_role(template_project, 'Frontend');
+    raise exception 'Member changed role after start';
+  exception when others then
+    if sqlerrm <> 'PROJECT_NOT_FORMING' then raise; end if;
+  end;
   if not exists (select 1 from public.projects where id = template_project and status = 'ACTIVE') then
     raise exception 'Lifecycle start failed after role validation';
   end if;

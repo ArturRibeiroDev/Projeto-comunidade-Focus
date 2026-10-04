@@ -35,6 +35,7 @@ type PrimaryAction = 'reuse' | 'join' | 'member' | 'resubmit' | 'start' | 'compl
 
 export function ProjectDetail({
   project,
+  onMembersChanged,
   profileId,
   discordConnected,
   canManageDiscord,
@@ -51,6 +52,7 @@ export function ProjectDetail({
   busy,
 }: {
   project: ProjectDisplay;
+  onMembersChanged?: () => Promise<void>;
   profileId: string;
   discordConnected: boolean;
   canManageDiscord: boolean;
@@ -225,9 +227,16 @@ export function ProjectDetail({
         role="tabpanel"
         tabIndex={0}
       >
-        <ProjectDetailSections project={project} tab={activeTab} alreadyJoined={alreadyJoined} />
+        <ProjectDetailSections
+          project={project}
+          profileId={profileId}
+          onMembersChanged={onMembersChanged}
+          tab={activeTab}
+          alreadyJoined={alreadyJoined}
+        />
         {activeTab === 'overview' && project.kind === 'project' && project.status && (
           <ProjectDiscordSection
+            projectName={project.name}
             canManage={canManageDiscord || isOwner}
             refreshKey={discordRefresh}
             projectId={project.id}

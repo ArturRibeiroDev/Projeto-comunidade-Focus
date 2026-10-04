@@ -81,7 +81,7 @@ export function friendlyAuthError(cause: unknown): string {
   const error = cause as { code?: string; message?: string } | null;
   const detail = `${error?.code ?? ''} ${error?.message ?? ''}`.toLowerCase();
   if (/identity_already_exists|identity_conflict/.test(detail))
-    return 'Este Discord já está conectado a outra conta do FocusAcademy.';
+    return 'Este Discord já está conectado a outra conta do Focus Academy.';
   if (/invalid.*credentials|invalid login|email.*password|login credentials/.test(detail))
     return 'E-mail ou senha incorretos.';
   if (/already.*registered|user.*already|email.*exists|already been registered/.test(detail))

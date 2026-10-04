@@ -55,7 +55,7 @@ import type {
 } from './types';
 import { collectProjectOptions, createEmptyFilters, filterProjects } from './utils/projectFilters';
 import {
-  defaultProjectForm,
+  createDefaultProjectForm,
   type ProjectFormState,
   type ToastMessage,
   type View,
@@ -99,7 +99,7 @@ function App() {
   );
   const [joinProjectId, setJoinProjectId] = useState<string>();
   const [creationSourceId, setCreationSourceId] = useState<string>();
-  const [projectForm, setProjectForm] = useState<ProjectFormState>(defaultProjectForm);
+  const [projectForm, setProjectForm] = useState<ProjectFormState>(createDefaultProjectForm);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [profileEditRequest, setProfileEditRequest] = useState(0);
   const [discordRefresh, setDiscordRefresh] = useState(0);
@@ -154,7 +154,34 @@ function App() {
     }
   }, []);
 
+  const projectRevision = useRef(0);
+  const refreshProjects = useCallback(async () => {
+    const currentUser = sessionUserRef.current;
+    if (!currentUser) return;
+    const revision = ++projectRevision.current;
+    const next = await getProjects();
+    if (sessionUserRef.current === currentUser && revision === projectRevision.current) {
+      setProjects(next);
+      setDiscordRefresh((value) => value + 1);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!userId) return;
+    const refresh = () => {
+      if (document.visibilityState !== 'hidden') void refreshProjects().catch(() => {});
+    };
+    refresh();
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [userId, activeView, selectedId, refreshProjects]);
+
   const reload = useCallback(async (userId: string) => {
+    const revision = ++projectRevision.current;
     const [nextTemplates, nextProjects, evidence, nextSkills, nextAccount, nextGamification] =
       await Promise.all([
         getTemplates(),
@@ -167,7 +194,7 @@ function App() {
     const nextProfile = await getProfile(userId, evidence);
     if (sessionUserRef.current !== userId) return;
     setTemplates(nextTemplates);
-    setProjects(nextProjects);
+    if (revision === projectRevision.current) setProjects(nextProjects);
     setSkillOptions(nextSkills);
     setProfile(nextProfile);
     setProfileDraft(nextProfile);
@@ -325,7 +352,7 @@ function App() {
     void runAction(
       async () => {
         selectProject(await createCommunityProject(projectForm));
-        setProjectForm(defaultProjectForm);
+        setProjectForm(createDefaultProjectForm());
       },
       'Projeto criado',
       'Seu projeto aguarda revisão e já aparece em Meus projetos.',
@@ -390,7 +417,7 @@ function App() {
   const signOutUser = () =>
     void signOut().catch((cause) => showToast('Não foi possível sair', friendlyAuthError(cause)));
 
-  if (!authReady) return <main className="app-loading">Carregando FocusAcademy...</main>;
+  if (!authReady) return <main className="app-loading">Carregando Focus Academy...</main>;
   if (error && !session)
     return (
       <main className="app-loading">
@@ -467,6 +494,7 @@ function App() {
       )}
       {activeView === 'catalog' && (
         <CatalogPage
+          onMembersChanged={refreshProjects}
           canManageDiscord={account.platform_role === 'ADMIN'}
           discordRefresh={discordRefresh}
           discord={discord}

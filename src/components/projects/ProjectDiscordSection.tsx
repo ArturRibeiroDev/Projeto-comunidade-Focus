@@ -14,12 +14,14 @@ type DiscordState = Awaited<ReturnType<typeof getProjectDiscordIntegration>>;
 
 export function ProjectDiscordSection({
   projectId,
+  projectName,
   status,
   started,
   canManage,
   refreshKey,
 }: {
   projectId: string;
+  projectName?: string;
   status: ProjectStatus;
   started: boolean;
   canManage: boolean;
@@ -36,30 +38,29 @@ export function ProjectDiscordSection({
     if (status === 'FORMING') return;
     let active = true;
     let timer: number | undefined;
+    let failures = 0;
     setLoading(true);
     const refresh = async () => {
       try {
         const next = await getProjectDiscordIntegration(projectId);
         if (!active) return;
         setState(next);
-        if (next.integration?.external_id) {
-          try {
-            setChannelUrl(await getProjectDiscordLink(projectId));
-          } catch {
-            setChannelUrl(null);
-          }
-        } else {
-          setChannelUrl(null);
-        }
         setError('');
+        failures = 0;
         setLoading(false);
-        if (started && (!next.integration || next.integration.status === 'PENDING')) {
+        if (
+          next.pendingEvent ||
+          (!next.failedEvent &&
+            started &&
+            (!next.integration || next.integration.status === 'PENDING'))
+        ) {
           timer = window.setTimeout(() => void refresh(), 2500);
         }
       } catch {
         if (active) {
           setError('Não foi possível carregar a integração Discord do projeto.');
           setLoading(false);
+          if (++failures <= 3) timer = window.setTimeout(() => void refresh(), 2500 * failures);
         }
       }
     };
@@ -70,22 +71,56 @@ export function ProjectDiscordSection({
     };
   }, [projectId, status, refreshKey, started, localRevision]);
 
+  const channelId = state?.integration?.external_id;
+  useEffect(() => {
+    let active = true;
+    setChannelUrl(null);
+    if (channelId) {
+      void getProjectDiscordLink(projectId)
+        .then((url) => {
+          if (active) setChannelUrl(url);
+        })
+        .catch(() => {});
+    }
+    return () => {
+      active = false;
+    };
+  }, [projectId, channelId, localRevision]);
+
   const run = async (operation: () => Promise<void>) => {
     setBusy(true);
     setError('');
     try {
       await operation();
-      setLocalRevision((revision) => revision + 1);
     } catch {
       setError('Não foi possível sincronizar Discord.');
     } finally {
+      setLocalRevision((revision) => revision + 1);
       setBusy(false);
     }
   };
 
   const integration = state?.integration;
   const failed = state?.failedEvent;
+  const synced = Boolean(
+    integration?.external_id &&
+    ['ACTIVE', 'READ_ONLY', 'ARCHIVED'].includes(integration.status) &&
+    integration.synced_count >= integration.member_count,
+  );
+  const pending = Boolean(
+    state?.pendingEvent ||
+    (!failed && (integration?.status === 'PENDING' || (!integration && started))),
+  );
   const isFailed = integration?.status === 'FAILED' || Boolean(failed);
+  const recoverable =
+    !synced &&
+    !pending &&
+    Boolean(
+      isFailed ||
+      integration?.last_error ||
+      (integration &&
+        (!integration.external_id || integration.synced_count < integration.member_count)),
+    );
   const retryAvailable =
     failed && (!failed.retry_after || new Date(failed.retry_after) <= new Date());
 
@@ -96,11 +131,13 @@ export function ProjectDiscordSection({
       </div>
       {status === 'FORMING' ? (
         <p className="detail-note">A integração será criada quando o projeto iniciar.</p>
-      ) : loading ? (
+      ) : loading && !state ? (
         <p className="detail-note">Verificando integração...</p>
       ) : (
         <>
-          {isFailed ? (
+          {pending ? (
+            <p className="detail-note">Sincronizando canal Discord...</p>
+          ) : isFailed && !synced ? (
             <>
               <p className="field-error">
                 Falha ao sincronizar Discord. {integration?.last_error || failed?.last_error}
@@ -121,7 +158,16 @@ export function ProjectDiscordSection({
             </>
           ) : integration?.external_id ? (
             <>
-              <p className="detail-note">#{integration.external_name || 'canal-da-squad'}</p>
+              <p className="detail-note">
+                {synced
+                  ? integration.status === 'ARCHIVED'
+                    ? 'Canal Discord arquivado'
+                    : integration.status === 'READ_ONLY'
+                      ? 'Canal Discord somente leitura'
+                      : 'Canal Discord ativo'
+                  : 'Canal da squad'}
+              </p>
+              {projectName && <p className="detail-note">{projectName}</p>}
               <p className="detail-note">
                 {integration.synced_count} de {integration.member_count} membros sincronizados
               </p>
@@ -139,28 +185,28 @@ export function ProjectDiscordSection({
                 Abrir no Discord <ExternalLink size={15} />
               </a>
             )}
-            {canManage && failed && retryAvailable && (
+            {canManage && recoverable && failed && retryAvailable && (
               <Button
                 disabled={busy}
                 icon={<RefreshCw size={15} />}
                 onClick={() => void run(() => retryDiscordEvent(failed.id, projectId))}
               >
-                Tentar novamente
+                Tentar sincronizar novamente
               </Button>
             )}
-            {canManage && !isFailed && started && (
+            {canManage && recoverable && !failed && started && (
               <Button
                 disabled={busy}
                 icon={<RefreshCw size={15} />}
                 onClick={() => void run(() => requestDiscordResync(projectId))}
               >
-                Sincronizar canal
+                Tentar sincronizar novamente
               </Button>
             )}
           </div>
         </>
       )}
-      {error && (
+      {error && !synced && (
         <p className="field-error" role="alert">
           {error}
         </p>
