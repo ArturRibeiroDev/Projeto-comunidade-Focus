@@ -30,44 +30,52 @@ export function ProjectDiscordSection({
   const [loading, setLoading] = useState(status !== 'FORMING');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-
-  const load = async () => {
-    const next = await getProjectDiscordIntegration(projectId);
-    setState(next);
-    if (next.integration?.external_id) {
-      setChannelUrl(await getProjectDiscordLink(projectId));
-    }
-  };
+  const [localRevision, setLocalRevision] = useState(0);
 
   useEffect(() => {
     if (status === 'FORMING') return;
     let active = true;
-    getProjectDiscordIntegration(projectId)
-      .then(async (next) => {
+    let timer: number | undefined;
+    setLoading(true);
+    const refresh = async () => {
+      try {
+        const next = await getProjectDiscordIntegration(projectId);
         if (!active) return;
         setState(next);
         if (next.integration?.external_id) {
-          const url = await getProjectDiscordLink(projectId);
-          if (active) setChannelUrl(url);
+          try {
+            setChannelUrl(await getProjectDiscordLink(projectId));
+          } catch {
+            setChannelUrl(null);
+          }
+        } else {
+          setChannelUrl(null);
         }
-      })
-      .catch(() => {
-        if (active) setError('Não foi possível carregar a integração Discord.');
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+        setError('');
+        setLoading(false);
+        if (started && (!next.integration || next.integration.status === 'PENDING')) {
+          timer = window.setTimeout(() => void refresh(), 2500);
+        }
+      } catch {
+        if (active) {
+          setError('Não foi possível carregar a integração Discord do projeto.');
+          setLoading(false);
+        }
+      }
+    };
+    void refresh();
     return () => {
       active = false;
+      if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [projectId, status, refreshKey]);
+  }, [projectId, status, refreshKey, started, localRevision]);
 
   const run = async (operation: () => Promise<void>) => {
     setBusy(true);
     setError('');
     try {
       await operation();
-      await load();
+      setLocalRevision((revision) => revision + 1);
     } catch {
       setError('Não foi possível sincronizar Discord.');
     } finally {
@@ -123,7 +131,7 @@ export function ProjectDiscordSection({
               O projeto terminou antes do início; nenhum canal foi criado.
             </p>
           ) : (
-            <p className="detail-note">Sincronização pendente.</p>
+            <p className="detail-note">Sincronização do canal pendente.</p>
           )}
           <div className="discord-actions">
             {channelUrl && (
@@ -146,7 +154,7 @@ export function ProjectDiscordSection({
                 icon={<RefreshCw size={15} />}
                 onClick={() => void run(() => requestDiscordResync(projectId))}
               >
-                Sincronizar
+                Sincronizar canal
               </Button>
             )}
           </div>

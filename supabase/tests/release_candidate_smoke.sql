@@ -73,7 +73,7 @@ begin
   perform set_config('request.jwt.claim.sub', v_owner_id::text, true);
   v_project_id := public.create_project_from_template('00000000-0000-4000-8000-000000000002', 'Backend');
   insert into rc_projects values ('completion', v_project_id);
-  perform public.update_project(v_project_id, 'RC capacity', 'RC scope', '', 3, '', '[]', '{}', '{}');
+  perform public.update_project(v_project_id, 'RC capacity', 'RC scope', '', 3, '', '[]', '{}', array['Backend', 'QA']);
   perform set_config('request.jwt.claim.sub', v_candidate_id::text, true);
   first_request := public.request_project_join(v_project_id, 'QA');
   perform set_config('request.jwt.claim.sub', v_other_id::text, true);
@@ -81,7 +81,7 @@ begin
   if exists (select 1 from public.project_join_requests where id = first_request) then
     raise exception 'Candidate read another candidate request'; end if;
   perform set_config('request.jwt.claim.sub', v_owner_id::text, true);
-  perform public.update_project(v_project_id, 'RC capacity', 'RC scope', '', 2, '', '[]', '{}', '{}');
+  perform public.update_project(v_project_id, 'RC capacity', 'RC scope', '', 2, '', '[]', '{}', array['Backend', 'QA']);
   perform public.decide_project_join_request(first_request, 'APPROVED');
   begin
     perform public.decide_project_join_request(second_request, 'APPROVED');

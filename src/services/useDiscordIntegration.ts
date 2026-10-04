@@ -9,6 +9,7 @@ import {
 import { getOwnDiscordIntegration } from './discordService';
 
 export type DiscordConnection = {
+  status: 'loading' | 'connected' | 'disconnected' | 'error';
   connected: boolean;
   username: string | null;
   identityCount: number;
@@ -26,6 +27,7 @@ export function useDiscordIntegration(
   returnToProfile: boolean,
 ): DiscordConnection {
   const [state, setState] = useState({
+    status: 'loading' as DiscordConnection['status'],
     connected: false,
     username: null as string | null,
     identityCount: 0,
@@ -40,6 +42,7 @@ export function useDiscordIntegration(
     const current = ++generation.current;
     if (!userId) {
       setState({
+        status: 'disconnected',
         connected: false,
         username: null,
         identityCount: 0,
@@ -49,6 +52,7 @@ export function useDiscordIntegration(
       });
       return;
     }
+    setState((previous) => ({ ...previous, status: 'loading', loading: true, error: '' }));
     let callbackError = '';
     try {
       if (callback.current?.userId !== userId)
@@ -65,6 +69,7 @@ export function useDiscordIntegration(
       const username = integration?.provider_username?.replace(/^@/, '').trim();
       setState((previous) => ({
         ...previous,
+        status: integration ? 'connected' : 'disconnected',
         connected: Boolean(integration),
         username: username && !/^\d{17,22}$/.test(username) ? username : null,
         identityCount: identities.length,
@@ -76,6 +81,7 @@ export function useDiscordIntegration(
       if (current === generation.current)
         setState((previous) => ({
           ...previous,
+          status: 'error',
           loading: false,
           error: callbackError || friendlyDiscordError(cause),
         }));
@@ -108,9 +114,12 @@ export function useDiscordIntegration(
   };
 
   const retry = async () => {
-    callback.current = undefined;
-    if (state.connected) await reload();
-    else await run(() => linkDiscordIdentity(returnToProfile), true);
+    if (state.status === 'error' || state.connected) {
+      callback.current = undefined;
+      await reload();
+      return;
+    }
+    await run(() => linkDiscordIdentity(returnToProfile), true);
   };
   return {
     ...state,

@@ -31,12 +31,15 @@ do $$
 declare owner_id uuid;
 declare other_id uuid;
 declare moderator_id uuid;
+declare linked_id uuid;
 declare v_project_id uuid;
+declare linked_project_id uuid;
 declare resync_id uuid;
 begin
   select id into owner_id from discord_test_ids where person = 'owner';
   select id into other_id from discord_test_ids where person = 'other';
   select id into moderator_id from discord_test_ids where person = 'moderator';
+  select id into linked_id from discord_test_ids where person = 'linked';
   perform set_config('request.jwt.claim.sub', owner_id::text, true);
 
   if (select count(*) from public.user_integrations) <> 1 then
@@ -70,6 +73,13 @@ begin
 
   perform set_config('request.jwt.claim.sub', owner_id::text, true);
   perform public.transition_project(v_project_id, 'ACTIVE');
+  if not exists (
+    select 1 from public.user_integrations
+    where user_id = owner_id and provider = 'discord'
+      and provider_user_id = '123456789012345678'
+  ) then
+    raise exception 'OAuth Discord identity changed during project start';
+  end if;
   perform public.transition_project(v_project_id, 'ACTIVE');
   if (select count(*) from public.integration_events
       where project_id = v_project_id and event_type = 'PROJECT_STARTED') <> 1 then
@@ -81,8 +91,32 @@ begin
   end if;
   perform public.transition_project(v_project_id, 'COMPLETED');
   perform public.transition_project(v_project_id, 'ARCHIVED');
+  if not exists (
+    select 1 from public.user_integrations
+    where user_id = owner_id and provider = 'discord'
+      and provider_user_id = '123456789012345678'
+  ) then
+    raise exception 'OAuth Discord identity changed during project lifecycle';
+  end if;
+
+  perform set_config('request.jwt.claim.sub', linked_id::text, true);
+  linked_project_id := public.create_community_project('Linked identity project', 'Descrição',
+    'Comunidade', 3, 'Misto', '', '[]', '{}', array['Backend'], '{}', '{}', 'Backend');
+  perform set_config('request.jwt.claim.sub', moderator_id::text, true);
+  perform public.moderate_project(linked_project_id, 'APPROVED');
+  perform set_config('request.jwt.claim.sub', linked_id::text, true);
+  perform public.transition_project(linked_project_id, 'ACTIVE');
+  if not exists (
+    select 1 from public.user_integrations
+    where user_id = linked_id and provider = 'discord'
+      and provider_user_id = '234567890123456789'
+  ) then
+    raise exception 'Linked Discord identity changed during project start';
+  end if;
+  perform set_config('request.jwt.claim.sub', owner_id::text, true);
   if (select count(*) from public.integration_events e where e.project_id = v_project_id) <> 4 then
-    raise exception 'Lifecycle events missing';
+    raise exception 'Lifecycle events missing: %',
+      (select count(*) from public.integration_events e where e.project_id = v_project_id);
   end if;
 end;
 $$;
@@ -93,6 +127,8 @@ select id from public.projects where name = 'Discord smoke';
 grant select on discord_test_project to authenticated, service_role;
 update public.integration_events set status = 'FAILED', last_error = 'Discord API: HTTP 503'
 where project_id = (select id from discord_test_project) and event_type = 'PROJECT_STARTED';
+update public.project_integrations set status = 'FAILED', last_error = 'Discord API: HTTP 503'
+where project_id = (select id from discord_test_project);
 set local role authenticated;
 do $$
 declare owner_id uuid;
@@ -110,6 +146,20 @@ begin
   exception when insufficient_privilege then null;
   end;
   perform set_config('request.jwt.claim.sub', owner_id::text, true);
+  if not exists (
+    select 1 from public.project_integrations
+    where project_id = (select id from discord_test_project)
+      and provider = 'discord' and status = 'FAILED'
+  ) then
+    raise exception 'Failed channel state was not isolated to project integration';
+  end if;
+  if not exists (
+    select 1 from public.user_integrations
+    where user_id = owner_id and provider = 'discord'
+      and provider_user_id = '123456789012345678'
+  ) then
+    raise exception 'Failed project sync altered the owner Discord identity';
+  end if;
   perform public.discord_retry_event(event_id);
   if (select status from public.integration_events where id = event_id) <> 'PENDING' then
     raise exception 'Owner retry did not queue event';

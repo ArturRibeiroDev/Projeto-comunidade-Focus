@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectDetail } from './ProjectDetail';
 import { DiscordSection } from '../profile/DiscordSection';
+import { ProjectDiscordSection } from './ProjectDiscordSection';
 import { useDiscordIntegration } from '../../services/useDiscordIntegration';
 import { friendlyDiscordError } from '../../services/authService';
 import type { ProjectDisplay } from '../../types';
@@ -15,15 +16,17 @@ const mocks = vi.hoisted(() => ({
   signInWithOAuth: vi.fn(),
   getUserIdentities: vi.fn(),
   getOwnDiscordIntegration: vi.fn(),
+  getProjectDiscordIntegration: vi.fn(),
+  getProjectDiscordLink: vi.fn(),
   getProjectDiscordReadiness: vi.fn(),
   getDiscordMembership: vi.fn(),
 }));
 vi.mock('../../lib/supabase', () => ({ getSupabase: () => ({ auth: mocks }) }));
 vi.mock('../../services/discordService', () => ({
   getOwnDiscordIntegration: mocks.getOwnDiscordIntegration,
+  getProjectDiscordIntegration: mocks.getProjectDiscordIntegration,
+  getProjectDiscordLink: mocks.getProjectDiscordLink,
   getDiscordMembership: mocks.getDiscordMembership,
-  getProjectDiscordIntegration: vi.fn(),
-  getProjectDiscordLink: vi.fn(),
   requestDiscordResync: vi.fn(),
   retryDiscordEvent: vi.fn(),
 }));
@@ -111,6 +114,8 @@ beforeEach(() => {
   mocks.getOwnDiscordIntegration.mockImplementation(async () =>
     connected ? { provider_user_id: '123456789012345678', provider_username: username } : null,
   );
+  mocks.getProjectDiscordIntegration.mockResolvedValue({ integration: null, failedEvent: null });
+  mocks.getProjectDiscordLink.mockResolvedValue(null);
   mocks.getProjectDiscordReadiness.mockImplementation(async () => ({
     readyCount: connected ? 1 : 0,
     memberCount: 1,
@@ -250,5 +255,117 @@ describe('Discord identity linking UX', () => {
 
   it('uses a friendly fallback for unknown errors', () => {
     expect(friendlyDiscordError(new Error('sensitive database error'))).not.toContain('sensitive');
+  });
+
+  it('retries a failed user-integration read without starting identity linking', async () => {
+    mocks.getOwnDiscordIntegration
+      .mockRejectedValueOnce(new Error('temporary read failure'))
+      .mockResolvedValue({
+        provider_user_id: '123456789012345678',
+        provider_username: 'julio',
+      });
+    connected = true;
+    render(<Flow profile />);
+    await screen.findByText('Erro');
+    fireEvent.click(screen.getByRole('button', { name: 'Tentar novamente' }));
+    await screen.findByText('Conectado');
+    expect(mocks.linkIdentity).not.toHaveBeenCalled();
+    expect(mocks.getOwnDiscordIntegration).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps user Discord connected while a pending project channel finishes syncing', async () => {
+    mocks.getProjectDiscordIntegration
+      .mockResolvedValueOnce({
+        integration: {
+          external_id: null,
+          external_name: null,
+          status: 'PENDING',
+          member_count: 1,
+          synced_count: 0,
+          last_error: null,
+          last_synced_at: null,
+        },
+        failedEvent: null,
+      })
+      .mockResolvedValue({
+        integration: {
+          external_id: 'channel-id',
+          external_name: 'squad',
+          status: 'ACTIVE',
+          member_count: 1,
+          synced_count: 1,
+          last_error: null,
+          last_synced_at: new Date().toISOString(),
+        },
+        failedEvent: null,
+      });
+    connected = true;
+    function SplitState() {
+      const connection = useDiscordIntegration('email-user', 0, false);
+      return (
+        <>
+          <DiscordSection connection={connection} />
+          <ProjectDiscordSection
+            projectId="project"
+            status="ACTIVE"
+            started
+            canManage
+            refreshKey={0}
+          />
+        </>
+      );
+    }
+    render(<SplitState />);
+    await screen.findByText('Sincronização do canal pendente.');
+    expect(screen.getByText('Conectado')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Sincronizar canal' })).toBeTruthy();
+
+    await screen.findByText('#squad', {}, { timeout: 4000 });
+    expect(screen.getByText('Conectado')).toBeTruthy();
+    expect(mocks.getProjectDiscordIntegration).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps user Discord connected when project-channel synchronization fails', async () => {
+    mocks.getProjectDiscordIntegration.mockResolvedValue({
+      integration: {
+        external_id: 'channel-id',
+        external_name: 'squad',
+        status: 'FAILED',
+        member_count: 1,
+        synced_count: 0,
+        last_error: 'discord unavailable',
+        last_synced_at: null,
+      },
+      failedEvent: {
+        id: 'event-id',
+        status: 'FAILED',
+        event_type: 'PROJECT_STARTED',
+        attempts: 1,
+        last_error: 'discord unavailable',
+        retry_after: null,
+        failure_kind: 'FINAL',
+        last_attempted_at: new Date().toISOString(),
+      },
+    });
+    connected = true;
+    function SplitState() {
+      const connection = useDiscordIntegration('email-user', 0, false);
+      return (
+        <>
+          <DiscordSection connection={connection} />
+          <ProjectDiscordSection
+            projectId="project"
+            status="ACTIVE"
+            started
+            canManage
+            refreshKey={0}
+          />
+        </>
+      );
+    }
+    render(<SplitState />);
+    await screen.findByText(/Falha ao sincronizar Discord/);
+    expect(screen.getByText('Conectado')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Tentar novamente' })).toBeTruthy();
   });
 });

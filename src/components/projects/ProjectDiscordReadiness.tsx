@@ -45,27 +45,35 @@ export function ProjectDiscordReadiness({
                 <small>
                   {member.discordConnected
                     ? 'Discord conectado'
-                    : own
-                      ? 'Conecte seu Discord para participar da squad.'
-                      : 'Precisa conectar o Discord'}
+                    : own && connection.loading
+                      ? 'Verificando sua conexão Discord...'
+                      : own && connection.status === 'error'
+                        ? 'Não foi possível verificar sua conexão Discord.'
+                        : own
+                          ? 'Conecte seu Discord para participar da squad.'
+                          : 'Precisa conectar o Discord'}
                 </small>
                 {own && member.discordConnected && connection.username && (
                   <small>@{connection.username}</small>
                 )}
-                {own && !member.discordConnected && (
+                {own && !member.discordConnected && connection.status !== 'loading' && (
                   <Button
-                    disabled={connection.pending || connection.loading}
+                    disabled={connection.pending}
                     icon={<Link2 size={15} />}
                     onClick={() =>
-                      void (connection.error ? connection.retry() : connection.connect())
+                      void (connection.status === 'error'
+                        ? connection.retry()
+                        : connection.connect())
                     }
                     variant="primary"
                   >
                     {connection.pending
                       ? 'Conectando...'
-                      : connection.error
-                        ? 'Tentar novamente'
-                        : 'Conectar meu Discord'}
+                      : connection.status === 'error'
+                        ? 'Verificar conexão'
+                        : connection.error
+                          ? 'Tentar novamente'
+                          : 'Conectar meu Discord'}
                   </Button>
                 )}
               </div>

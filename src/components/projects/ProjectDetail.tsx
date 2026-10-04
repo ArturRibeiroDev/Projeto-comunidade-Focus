@@ -334,10 +334,20 @@ export function ProjectDetail({
                 <Button
                   disabled={busy || discord.pending || discord.loading}
                   icon={<Link2 size={17} />}
-                  onClick={onConnectDiscord}
+                  onClick={
+                    discord.status === 'error' ? () => void discord.retry() : onConnectDiscord
+                  }
                   variant="primary"
                 >
-                  {discord.pending ? 'Conectando...' : 'Conectar meu Discord'}
+                  {discord.pending
+                    ? 'Conectando...'
+                    : discord.loading
+                      ? 'Verificando Discord...'
+                      : discord.status === 'error'
+                        ? 'Verificar conexão'
+                        : discord.error
+                          ? 'Tentar novamente'
+                          : 'Conectar meu Discord'}
                 </Button>
               ) : pendingRequest ? (
                 <Button disabled icon={<UsersRound size={17} />} variant="primary">
