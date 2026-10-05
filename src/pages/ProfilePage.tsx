@@ -118,16 +118,15 @@ export function ProfilePage({
     Boolean(profile.links.linkedin && !safeExternalUrl(profile.links.linkedin));
 
   return (
-    <div className="page-stack content-narrow">
+    <div className="page-stack profile-page">
       <div className="profile-heading-actions">
-        <span className="profile-kicker">Perfil profissional</span>
         {!editing && (
           <Button icon={<Pencil size={16} />} onClick={() => setEditing(true)}>
             Editar perfil
           </Button>
         )}
       </div>
-      <ProfileHeader profile={savedProfile} />
+      <ProfileHeader profile={savedProfile} discordConnected={discord.connected} />
       {editing ? (
         <form className="structured-form profile-edit-form" onSubmit={submit} ref={formRef}>
           <div className="form-intro field-wide">
@@ -305,36 +304,40 @@ export function ProfilePage({
           </div>
         </form>
       ) : (
-        <div className="profile-layout profile-layout-read">
-          <div className="profile-overview">
-            <SkillsSection title="Tecnologias" values={savedProfile.technologies} accent />
+        <>
+          <div className="profile-skills-overview">
             <SkillsSection title="Áreas" values={savedProfile.areas} />
             <SkillsSection title="Quero praticar" values={savedProfile.interests} />
+            <SkillsSection title="Tecnologias" values={savedProfile.technologies} />
           </div>
-          <div className="profile-overview">
-            <DiscordSection connection={discord} />
-            {gamification && <GamificationSection progress={gamification} />}
-            <section className="profile-section">
-              <div className="profile-section-title">
-                <h2>Projetos</h2>
-                <span>{currentProjects.length} ativos</span>
-              </div>
-              {currentProjects.length > 0 ? (
-                <ul className="profile-projects">
-                  {currentProjects.map((project) => (
-                    <li key={project.id}>
-                      <strong>{project.name}</strong>
-                      <span>{project.status ? projectStatusLabels[project.status] : ''}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="muted-copy">Nenhuma participação ativa no momento.</p>
-              )}
-            </section>
-            <EvidenceSection evidence={savedProfile.evidence} projects={projects} />
+          <div className="profile-layout profile-layout-read">
+            <div className="profile-overview">
+              <section className="profile-section">
+                <div className="profile-section-title">
+                  <h2>Projetos</h2>
+                  <span>{currentProjects.length} ativos</span>
+                </div>
+                {currentProjects.length > 0 ? (
+                  <ul className="profile-projects">
+                    {currentProjects.map((project) => (
+                      <li key={project.id}>
+                        <strong>{project.name}</strong>
+                        <span>{project.status ? projectStatusLabels[project.status] : ''}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="muted-copy">Nenhuma participação ativa no momento.</p>
+                )}
+              </section>
+              <EvidenceSection evidence={savedProfile.evidence} projects={projects} />
+            </div>
+            <aside className="profile-overview">
+              {gamification && <GamificationSection progress={gamification} />}
+              <DiscordSection connection={discord} />
+            </aside>
           </div>
-        </div>
+        </>
       )}
     </div>
   );

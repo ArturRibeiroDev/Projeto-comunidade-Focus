@@ -36,6 +36,7 @@ type PrimaryAction = 'reuse' | 'join' | 'member' | 'resubmit' | 'start' | 'compl
 export function ProjectDetail({
   project,
   onMembersChanged,
+  onOpenMember,
   profileId,
   discordConnected,
   canManageDiscord,
@@ -53,6 +54,7 @@ export function ProjectDetail({
 }: {
   project: ProjectDisplay;
   onMembersChanged?: () => Promise<void>;
+  onOpenMember?: (key: string) => void;
   profileId: string;
   discordConnected: boolean;
   canManageDiscord: boolean;
@@ -228,6 +230,7 @@ export function ProjectDetail({
         tabIndex={0}
       >
         <ProjectDetailSections
+          onOpenMember={onOpenMember}
           project={project}
           profileId={profileId}
           onMembersChanged={onMembersChanged}
@@ -264,6 +267,7 @@ export function ProjectDetail({
         )}
         {activeTab === 'overview' && forming && isOwner && (
           <ProjectJoinRequests
+            onOpenMember={onOpenMember}
             busy={busy}
             onApprove={(requestId) => onDecideJoinRequest(requestId, 'APPROVED')}
             onReject={(requestId) => onDecideJoinRequest(requestId, 'REJECTED')}

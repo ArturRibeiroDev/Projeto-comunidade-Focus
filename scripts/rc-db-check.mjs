@@ -203,6 +203,7 @@ try {
   sql(readFileSync('supabase/seed.sql', 'utf8'));
   for (const file of [
     'security_catalog_smoke.sql',
+    'community_profiles_smoke.sql',
     'participation_roles_smoke.sql',
     'remote_smoke.sql',
     'lifecycle_smoke.sql',

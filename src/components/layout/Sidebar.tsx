@@ -8,18 +8,21 @@ import {
   PanelLeftOpen,
   Shield,
   UserRound,
+  Users,
   X,
 } from 'lucide-react';
 import type { MemberProfile, PlatformRole } from '../../types';
 import type { View } from '../../viewTypes';
 import { Button } from '../ui/Button';
 import { FocusLogo } from './FocusLogo';
+import { Avatar } from '../ui/Avatar';
 
 const navigation: Array<{ view: View; label: string; icon: typeof LayoutDashboard }> = [
   { view: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { view: 'catalog', label: 'Projetos', icon: BookOpen },
   { view: 'my-projects', label: 'Meus projetos', icon: BriefcaseBusiness },
   { view: 'create', label: 'Criar projeto', icon: CirclePlus },
+  { view: 'community', label: 'Comunidade', icon: Users },
   { view: 'profile', label: 'Perfil', icon: UserRound },
 ];
 
@@ -133,7 +136,7 @@ export function Sidebar({
 
         <div className="sidebar-footer">
           <button className="profile-mini" onClick={() => navigate('profile')} title="Abrir perfil">
-            <img src={profile.avatarUrl} alt="" />
+            <Avatar src={profile.avatarUrl} name={profile.name} />
             <span className="profile-mini-copy">
               <strong>{profile.name}</strong>
               <small>{profile.primaryRole}</small>

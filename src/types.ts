@@ -41,6 +41,7 @@ export type ProjectTemplate = {
 };
 
 export type ProjectMember = {
+  communityId?: string;
   memberId: string;
   name: string;
   avatarUrl: string;
@@ -52,6 +53,9 @@ export type ProjectMember = {
 export type ProjectJoinRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
 
 export type ProjectJoinRequest = {
+  communityId?: string;
+  bio?: string;
+  interests?: string[];
   id: string;
   projectId: string;
   userId: string;

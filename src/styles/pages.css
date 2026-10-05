@@ -1065,7 +1065,8 @@
 .create-options > button {
   display: grid;
   min-height: 104px;
-  grid-template-columns: 34px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   align-items: start;
   gap: 12px;
   padding: 16px;

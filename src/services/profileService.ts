@@ -29,7 +29,13 @@ export async function getProfile(
   const client = getSupabase();
   const [profileResult, skillsResult, skillLinksResult, membershipResult, completedResult] =
     await Promise.all([
-      client.from('profiles').select('*').eq('id', userId).single(),
+      client
+        .from('profiles')
+        .select(
+          'id,name,avatar_url,bio,main_role,secondary_roles,interests,availability,github_url,linkedin_url',
+        )
+        .eq('id', userId)
+        .single(),
       client.from('skills').select('id,name,kind'),
       client.from('profile_skills').select('skill_id').eq('profile_id', userId),
       client.from('project_members').select('project_id').eq('user_id', userId),
@@ -63,9 +69,7 @@ export async function getProfile(
   return {
     id: row.id,
     name: row.name,
-    avatarUrl:
-      safeExternalUrl(row.avatar_url) ||
-      `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(row.name)}`,
+    avatarUrl: safeExternalUrl(row.avatar_url) || '',
     bio: row.bio,
     primaryRole: row.main_role,
     secondaryRoles: row.secondary_roles ?? [],

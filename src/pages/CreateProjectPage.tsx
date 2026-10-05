@@ -1,9 +1,9 @@
-import { ArrowRight, BookTemplate, Save } from 'lucide-react';
+import { ArrowRight, Save } from 'lucide-react';
+import { AreaSelector } from '../components/ui/AreaSelector';
 import { useState, type FormEvent } from 'react';
 import { projectDifficulties, technologySuggestions } from '../data/options';
 import type { ProjectTemplate, ProjectDifficulty } from '../types';
 import type { ProjectFormState } from '../viewTypes';
-import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { PageHeader } from '../components/ui/PageHeader';
 import { projectPlanError, todayIsoDate, validProjectPlan } from '../domain/projectSchedule';
@@ -70,7 +70,6 @@ export function CreateProjectPage({
           onClick={() => setMode('template')}
           role="tab"
         >
-          <BookTemplate size={20} />
           <span>
             <strong>Usar uma Focus Idea</strong>
             <small>Comece com um escopo preparado e adapte com a squad.</small>
@@ -94,9 +93,6 @@ export function CreateProjectPage({
           {templates.map((template) => (
             <article className="template-row" key={template.id}>
               <div className="template-copy">
-                <div>
-                  <Badge tone="orange">Focus Idea</Badge>
-                </div>
                 <h2>{template.name}</h2>
                 <p>{template.description}</p>
                 <small>
@@ -198,32 +194,23 @@ export function CreateProjectPage({
             </div>
             {planError && <p className="field-error">{planError}</p>}
           </div>
-          <label className="field">
-            <span>Áreas sugeridas para contribuir</span>
-            <select
-              multiple
-              required
-              value={projectForm.recommendedAreas
-                .split(',')
-                .map((item) => item.trim())
-                .filter(Boolean)}
-              onChange={(event) =>
-                update(
-                  'recommendedAreas',
-                  Array.from(event.currentTarget.selectedOptions, (option) => option.value).join(
-                    ', ',
-                  ),
-                )
-              }
-              size={Math.min(6, Math.max(3, areaOptions.length))}
-            >
-              {areaOptions.map((area) => (
-                <option key={area} value={area}>
-                  {area}
-                </option>
-              ))}
-            </select>
-          </label>
+          <AreaSelector
+            options={areaOptions}
+            disabled={busy}
+            values={projectForm.recommendedAreas
+              .split(',')
+              .map((item) => item.trim())
+              .filter(Boolean)}
+            onChange={(areas) =>
+              onFormChange({
+                ...projectForm,
+                recommendedAreas: areas.join(', '),
+                ownerParticipationRole: areas.includes(projectForm.ownerParticipationRole)
+                  ? projectForm.ownerParticipationRole
+                  : '',
+              })
+            }
+          />
           <label className="field">
             <span>Sua função na squad</span>
             <select

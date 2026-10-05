@@ -23,34 +23,51 @@ import { safeExternalUrl } from '../utils/profileFields';
 
 export async function getProjects(): Promise<Project[]> {
   const client = getSupabase();
-  const [
-    projects,
-    members,
-    technologies,
-    areas,
-    skills,
-    profiles,
-    joinRequests,
-    integrations,
-    profileSkills,
-  ] = await Promise.all([
-    client.from('projects').select('*').order('created_at', { ascending: false }),
-    client
-      .from('project_members')
-      .select('project_id,user_id,main_role,contribution_intent,joined_at'),
-    client.from('project_technologies').select('project_id,skill_id'),
-    client.from('project_areas').select('project_id,skill_id'),
-    client.from('skills').select('id,name,kind'),
-    client.from('profiles').select('id,name,avatar_url'),
-    client
-      .from('project_join_requests')
-      .select(
-        'id,project_id,user_id,main_role,contribution_intent,status,requested_at,decided_at,decided_by',
-      )
-      .order('requested_at', { ascending: false }),
-    client.from('user_integrations').select('user_id,provider').eq('provider', 'discord'),
-    client.from('profile_skills').select('profile_id,skill_id'),
-  ]);
+  const [projects, members, technologies, areas, skills, joinRequests, integrations] =
+    await Promise.all([
+      client.from('projects').select('*').order('created_at', { ascending: false }),
+      client
+        .from('project_members')
+        .select('project_id,user_id,main_role,contribution_intent,joined_at'),
+      client.from('project_technologies').select('project_id,skill_id'),
+      client.from('project_areas').select('project_id,skill_id'),
+      client.from('skills').select('id,name,kind'),
+      client
+        .from('project_join_requests')
+        .select(
+          'id,project_id,user_id,main_role,contribution_intent,status,requested_at,decided_at,decided_by',
+        )
+        .order('requested_at', { ascending: false }),
+      client.from('user_integrations').select('user_id,provider').eq('provider', 'discord'),
+    ]);
+  const personIds = [
+    ...new Set([
+      ...(projects.data ?? []).map((row) => row.owner_id as string),
+      ...(members.data ?? []).map((row) => row.user_id as string),
+      ...(joinRequests.data ?? []).map((row) => row.user_id as string),
+    ]),
+  ];
+  const peopleBatches = [];
+  for (let offset = 0; offset < personIds.length; offset += 100) {
+    const ids = personIds.slice(offset, offset + 100);
+    peopleBatches.push(
+      await Promise.all([
+        client
+          .from('profiles')
+          .select('id,community_id,name,avatar_url,bio,interests')
+          .in('id', ids),
+        client.from('profile_skills').select('profile_id,skill_id').in('profile_id', ids),
+      ]),
+    );
+  }
+  const profiles = {
+    data: peopleBatches.flatMap(([people]) => people.data ?? []),
+    error: peopleBatches.find(([people]) => people.error)?.[0].error,
+  };
+  const profileSkills = {
+    data: peopleBatches.flatMap(([, links]) => links.data ?? []),
+    error: peopleBatches.find(([, links]) => links.error)?.[1].error,
+  };
   for (const [source, result] of [
     ['projects', projects],
     ['project_members', members],
@@ -115,10 +132,9 @@ export async function getProjects(): Promise<Project[]> {
         const name = person?.name ?? 'Membro Focus';
         return {
           memberId: member.user_id,
+          communityId: person?.community_id,
           name,
-          avatarUrl:
-            safeExternalUrl(person?.avatar_url) ||
-            `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(name)}`,
+          avatarUrl: safeExternalUrl(person?.avatar_url) || '',
           role: member.main_role,
           contributionIntent: member.contribution_intent,
           joinedAt: member.joined_at,
@@ -134,10 +150,11 @@ export async function getProjects(): Promise<Project[]> {
           id: request.id,
           projectId: request.project_id,
           userId: request.user_id,
+          communityId: person?.community_id,
+          bio: person?.bio ?? '',
+          interests: person?.interests ?? [],
           name,
-          avatarUrl:
-            safeExternalUrl(person?.avatar_url) ||
-            `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(name)}`,
+          avatarUrl: safeExternalUrl(person?.avatar_url) || '',
           role: request.main_role,
           contributionIntent: request.contribution_intent,
           status: request.status as 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED',

@@ -2,8 +2,15 @@ import { Github, Linkedin } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { MemberProfile } from '../../types';
 import { safeExternalUrl } from '../../utils/profileFields';
+import { Avatar } from '../ui/Avatar';
 
-export function ProfileHeader({ profile }: { profile: MemberProfile }) {
+export function ProfileHeader({
+  profile,
+  discordConnected,
+}: {
+  profile: MemberProfile;
+  discordConnected?: boolean;
+}) {
   const bioRef = useRef<HTMLParagraphElement>(null);
   const [expanded, setExpanded] = useState(false);
   const [canExpand, setCanExpand] = useState(false);
@@ -23,21 +30,8 @@ export function ProfileHeader({ profile }: { profile: MemberProfile }) {
   }, [expanded, profile.bio]);
   return (
     <header className="profile-header">
-      {profile.avatarUrl ? (
-        <img src={profile.avatarUrl} alt="" />
-      ) : (
-        <span className="profile-avatar-initials" aria-label="Avatar com iniciais">
-          {profile.name
-            .trim()
-            .split(/\s+/)
-            .slice(0, 2)
-            .map((part) => part[0])
-            .join('')
-            .toUpperCase()}
-        </span>
-      )}
+      <Avatar name={profile.name} src={profile.avatarUrl} />
       <div className="profile-identity">
-        <span className="profile-kicker">Perfil profissional</span>
         <h1>{profile.name}</h1>
         <strong>{profile.primaryRole}</strong>
         {profile.bio && (
@@ -58,6 +52,7 @@ export function ProfileHeader({ profile }: { profile: MemberProfile }) {
           </>
         )}
         <div className="profile-links">
+          {discordConnected && <span>Discord conectado</span>}
           {safeExternalUrl(profile.links.github) && (
             <a
               href={safeExternalUrl(profile.links.github)}

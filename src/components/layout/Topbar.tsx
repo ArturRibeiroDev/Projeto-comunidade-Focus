@@ -11,6 +11,7 @@ const titles: Record<View, string> = {
   catalog: 'Projetos',
   'my-projects': 'Meus projetos',
   create: 'Criar projeto',
+  community: 'Comunidade',
   profile: 'Perfil',
   admin: 'Administração',
 };

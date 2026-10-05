@@ -40,6 +40,26 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+it('opens a squad member using their public key, not their Auth identifier', () => {
+  const onOpenMember = vi.fn();
+  render(
+    <ProjectMembers
+      project={{
+        ...project,
+        members: project.members.map((member) => ({
+          ...member,
+          communityId: `public-${member.memberId}`,
+        })),
+      }}
+      profileId="owner"
+      onOpenMember={onOpenMember}
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Ver perfil de member' }));
+  expect(onOpenMember).toHaveBeenCalledWith('public-member');
+  expect(screen.getByText('Responsável')).toBeTruthy();
+});
+
 it('confirms removal of another member and invalidates the squad after the RPC', async () => {
   const onMembersChanged = vi.fn(async () => {});
   render(

@@ -247,6 +247,8 @@ Exportar envs do runner HTTP/E2E/load pelo armazenamento local/CI protegido. Loa
 
 ## Evidencia Local Final
 
+Rodada Comunidade: aplicar manualmente `202610040002_community_profiles.sql` antes do frontend correspondente. Não foi aplicada remotamente. Nova coluna com UUID público independente em profiles; nenhuma policy de evidences/user_integrations é ampliada. `community_profiles_smoke.sql` testa paginação, filtros, histórico aprovado, ausência de dados privados/IDs Auth, acesso anônimo negado e perfil suspenso indisponível. A nova navegação depende dessas RPCs e não faz fallback para SELECT *.
+
 Rodada UX/estado: aplicar manualmente `202610040001_forming_member_management.sql` antes de publicar o frontend correspondente. Sem essa migration, os controles de membros retornam erro, não fazem fallback de escrita direta. `participation_roles_smoke.sql` cobre remoção por owner, auto-remoção negada, MEMBER sem permissão, função própria canônica, rejeição de texto arbitrário/escrita direta e bloqueios após ACTIVE. A migration não foi aplicada remotamente.
 
 PASS: npm run test; npm run lint; npm run format:check; npm run build; npm audit --audit-level=moderate; git diff --check; npm run test:db:rc; npm run test:e2e:types; npm run test:e2e -- --project=local; npm run scan:dist.

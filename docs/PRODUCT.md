@@ -41,6 +41,13 @@ Os escopos oficiais são registros `ProjectTemplate`; cada squad usa um `Project
 - Community Projects e réplicas começam `PENDING`; só owner e moderação os veem até aprovação. Um projeto rejeitado mostra o motivo ao owner; após edição, pode ser reenviado. Editar um projeto comunitário aprovado em formação o devolve à revisão. Templates Focus oficiais não passam por esse fluxo e só ADMIN pode criá-los, editá-los ou arquivá-los.
 - MODERATOR revisa e cancela projetos comunitários abusivos pelo fluxo de moderação, sem gerir papéis, limites ou conteúdo oficial. ADMIN tem visão geral, gestão de usuários, moderação, templates, configurações, auditoria e cancelamento administrativo global de projetos. Não há hard-delete administrativo de usuários/projetos.
 
+## Comunidade e perfis
+
+- Comunidade oferece descoberta de membros ativos para pessoas autenticadas, com busca por nome, área canônica e interesse. São 20 resultados por página, sem ranking, feed, mensagens ou seguidores.
+- Perfil público significa público para a comunidade autenticada, não para a internet. O drawer abre pela Comunidade, squad e solicitação de entrada; contém nome, foto, bio, áreas/tecnologias/interesses, links GitHub/LinkedIn já configurados e somente o indicador de Discord conectado.
+- Projetos e histórico públicos mostram até 20 registros recentes de projetos aprovados. Evidências pessoais sem projeto e dados de projetos pendentes/rejeitados permanecem privados. O histórico usa somente tipo, função, nome do projeto e data; não publica o texto livre da evidência.
+- A navegação pública usa uma chave distinta do UUID de Auth. Nenhum email, papel administrativo, Discord ID ou estado de suspensão é incluído nessa representação.
+
 ## Fronteiras do produto
 
 - **Discord:** comunicação entre pessoas e squads.

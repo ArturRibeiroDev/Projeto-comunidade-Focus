@@ -17,6 +17,7 @@ import { Modal } from '../components/ui/Modal';
 export function CatalogPage({
   filters,
   onMembersChanged,
+  onOpenMember,
   projectOptions,
   projects,
   selectedProject,
@@ -42,6 +43,7 @@ export function CatalogPage({
 }: {
   filters: Filters;
   onMembersChanged?: () => Promise<void>;
+  onOpenMember?: (key: string) => void;
   projectOptions: { areas: string[]; technologies: string[] };
   projects: ProjectDisplay[];
   selectedProject?: ProjectDisplay;
@@ -154,6 +156,7 @@ export function CatalogPage({
               canManageDiscord={canManageDiscord}
               discordRefresh={discordRefresh}
               onMembersChanged={onMembersChanged}
+              onOpenMember={onOpenMember}
               discord={discord}
               project={selectedProject}
             />

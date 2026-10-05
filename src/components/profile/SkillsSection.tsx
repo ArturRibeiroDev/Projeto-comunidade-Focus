@@ -1,9 +1,6 @@
-import { Badge } from '../ui/Badge';
-
 export function SkillsSection({
   title,
   values,
-  accent = false,
 }: {
   title: string;
   values: string[];
@@ -14,11 +11,7 @@ export function SkillsSection({
       <h2>{title}</h2>
       <div className="skill-list">
         {values.length > 0 ? (
-          values.map((value) => (
-            <Badge key={value} tone={accent ? 'orange' : 'zinc'}>
-              {value}
-            </Badge>
-          ))
+          <p className="profile-skill-copy">{values.join(' · ')}</p>
         ) : (
           <p className="muted-copy">
             {title === 'Áreas' ? 'Nenhuma área adicionada.' : 'Nenhum item adicionado.'}

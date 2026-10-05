@@ -1,6 +1,7 @@
 import { LogOut, Pencil, UserRound } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import type { MemberProfile } from '../../types';
+import { Avatar } from '../ui/Avatar';
 
 export function UserMenu({
   profile,
@@ -61,7 +62,7 @@ export function UserMenu({
         }}
         ref={trigger}
       >
-        <img className="topbar-avatar" src={profile.avatarUrl} alt="" />
+        <Avatar className="topbar-avatar" src={profile.avatarUrl} name={profile.name} />
       </button>
       {open && (
         <div
@@ -82,7 +83,7 @@ export function UserMenu({
           }}
         >
           <div className="user-menu-identity">
-            <img src={profile.avatarUrl} alt="" />
+            <Avatar src={profile.avatarUrl} name={profile.name} />
             <span>
               <strong>{profile.name}</strong>
               <small>{profile.primaryRole}</small>

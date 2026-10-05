@@ -249,7 +249,7 @@ function StackAndAreas({ project }: { project: ProjectDisplay }) {
   );
 }
 
-function Squad({ project, profileId, onMembersChanged }: ProjectMembersProps) {
+function Squad({ project, profileId, onMembersChanged, onOpenMember }: ProjectMembersProps) {
   return (
     <>
       <DetailSection
@@ -260,6 +260,7 @@ function Squad({ project, profileId, onMembersChanged }: ProjectMembersProps) {
           <strong>Responsável:</strong> {project.ownerName ?? 'Responsável Focus'}
         </p>
         <ProjectMembers
+          onOpenMember={onOpenMember}
           project={project}
           profileId={profileId}
           onMembersChanged={onMembersChanged}
@@ -371,6 +372,7 @@ function Delivery({ project }: { project: ProjectDisplay }) {
 }
 
 export function ProjectDetailSections({
+  onOpenMember,
   project,
   tab,
   alreadyJoined,
@@ -384,7 +386,14 @@ export function ProjectDetailSections({
   if (tab === 'scope') return <Scope project={project} />;
   if (tab === 'stack') return <StackAndAreas project={project} />;
   if (tab === 'squad')
-    return <Squad project={project} profileId={profileId} onMembersChanged={onMembersChanged} />;
+    return (
+      <Squad
+        project={project}
+        profileId={profileId}
+        onMembersChanged={onMembersChanged}
+        onOpenMember={onOpenMember}
+      />
+    );
   if (tab === 'details') return <ProjectDetails project={project} />;
   return <Delivery project={project} />;
 }

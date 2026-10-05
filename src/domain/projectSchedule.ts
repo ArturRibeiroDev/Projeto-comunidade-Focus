@@ -4,8 +4,7 @@ export type ProjectPlan = {
 };
 
 export function todayIsoDate(now = new Date()): string {
-  const offset = now.getTimezoneOffset() * 60_000;
-  return new Date(now.getTime() - offset).toISOString().slice(0, 10);
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
 
 export function formatProjectDuration(
@@ -38,11 +37,7 @@ export function validProjectPlan(plan: ProjectPlan): boolean {
 export function projectPlanError(plan: ProjectPlan): string {
   if (plan.plannedStartDate && plan.plannedStartDate < todayIsoDate())
     return 'Escolha uma data de início válida.';
-  if (
-    plan.plannedStartDate &&
-    plan.plannedEndDate &&
-    plan.plannedEndDate < plan.plannedStartDate
-  )
+  if (plan.plannedStartDate && plan.plannedEndDate && plan.plannedEndDate < plan.plannedStartDate)
     return 'A data de conclusão precisa ser posterior à data de início.';
   return '';
 }

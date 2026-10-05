@@ -2,14 +2,17 @@ import { Check, Clock, X } from 'lucide-react';
 import type { ProjectJoinRequest } from '../../types';
 import { formatDate } from '../../utils/format';
 import { Button } from '../ui/Button';
+import { Avatar } from '../ui/Avatar';
 
 export function ProjectJoinRequests({
   requests,
+  onOpenMember,
   busy,
   onApprove,
   onReject,
 }: {
   requests: ProjectJoinRequest[];
+  onOpenMember?: (key: string) => void;
   busy: boolean;
   onApprove: (requestId: string) => void;
   onReject: (requestId: string) => void;
@@ -25,18 +28,34 @@ export function ProjectJoinRequests({
       <div className="join-request-list">
         {pending.map((request) => (
           <article className="join-request-row" key={request.id}>
-            <img src={request.avatarUrl} alt="" />
+            <Avatar src={request.avatarUrl} name={request.name} />
             <div className="join-request-main">
               <div>
                 <strong>{request.name}</strong>
-                <span>{request.role}</span>
+                <span>Função solicitada: {request.role}</span>
               </div>
               {request.contributionIntent && <p>{request.contributionIntent}</p>}
+              {!request.contributionIntent && request.bio && (
+                <p className="member-summary">{request.bio}</p>
+              )}
+              {Boolean(request.interests?.length) && (
+                <p className="muted-copy">
+                  Quer praticar: {request.interests!.slice(0, 4).join(' · ')}
+                </p>
+              )}
+              {request.communityId && onOpenMember && (
+                <Button
+                  variant="ghost"
+                  size="small"
+                  aria-label={`Ver perfil de ${request.name}`}
+                  onClick={() => onOpenMember(request.communityId!)}
+                >
+                  Ver perfil
+                </Button>
+              )}
               <small>
                 <Clock size={13} />
                 {formatDate(request.requestedAt)}
-                {' · '}
-                Discord {request.discordConnected ? 'conectado' : 'pendente'}
               </small>
               {(request.areas.length > 0 || request.technologies.length > 0) && (
                 <div className="request-tags">

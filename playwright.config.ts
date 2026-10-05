@@ -11,7 +11,7 @@ export default defineConfig({
   projects: [
     {
       name: 'local',
-      testMatch: ['auth.local.spec.ts', 'project-footer.spec.ts'],
+      testMatch: ['auth.local.spec.ts', 'project-footer.spec.ts', 'community.local.spec.ts'],
       use: { baseURL: 'http://localhost:4180' },
     },
     {

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Archive, Check, Pencil, RotateCcw, Search, ShieldAlert, X } from 'lucide-react';
 import type { PlatformRole } from '../types';
 import { getSupabase } from '../lib/supabase';
+import { Avatar } from '../components/ui/Avatar';
 import {
   getAdminAudit,
   getAdminOverview,
@@ -373,14 +374,7 @@ export function AdminPage({
           <div className="admin-list">
             {filteredUsers.map((user) => (
               <article className="admin-row" key={user.user_id}>
-                <img
-                  className="admin-avatar"
-                  src={
-                    user.avatar_url ||
-                    `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(user.name)}`
-                  }
-                  alt=""
-                />
+                <Avatar className="admin-avatar" src={user.avatar_url} name={user.name} />
                 <div className="admin-row-main">
                   <strong>{user.name}</strong>
                   <small>{user.email}</small>
@@ -777,13 +771,10 @@ export function AdminPage({
       >
         {profileDetail && (
           <div className="admin-profile">
-            <img
+            <Avatar
               className="admin-avatar"
-              src={String(
-                profileDetail.avatar_url ||
-                  `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(String(profileDetail.name || 'Focus'))}`,
-              )}
-              alt=""
+              src={String(profileDetail.avatar_url || '')}
+              name={String(profileDetail.name || 'Membro')}
             />
             <p>{String(profileDetail.bio || 'Sem bio.')}</p>
             <p>Função: {String(profileDetail.main_role || 'Outra')}</p>

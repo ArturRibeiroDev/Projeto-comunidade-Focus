@@ -6,7 +6,8 @@ export const createDefaultProjectForm = (): ProjectFormState => ({
   plannedStartDate: todayIsoDate(),
 });
 
-export type View = 'dashboard' | 'catalog' | 'my-projects' | 'create' | 'profile' | 'admin';
+export type View =
+  'dashboard' | 'catalog' | 'my-projects' | 'create' | 'community' | 'profile' | 'admin';
 
 export type ToastMessage = {
   title: string;

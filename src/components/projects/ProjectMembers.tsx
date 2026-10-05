@@ -3,14 +3,21 @@ import { useState } from 'react';
 import type { ProjectDisplay } from '../../types';
 import { removeProjectMember, updateMyProjectRole } from '../../services/projectService';
 import { Button } from '../ui/Button';
+import { Avatar } from '../ui/Avatar';
 
 export type ProjectMembersProps = {
   project: ProjectDisplay;
   profileId?: string;
   onMembersChanged?: () => Promise<void>;
+  onOpenMember?: (key: string) => void;
 };
 
-export function ProjectMembers({ project, profileId, onMembersChanged }: ProjectMembersProps) {
+export function ProjectMembers({
+  project,
+  profileId,
+  onMembersChanged,
+  onOpenMember,
+}: ProjectMembersProps) {
   const [confirmId, setConfirmId] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -34,22 +41,23 @@ export function ProjectMembers({ project, profileId, onMembersChanged }: Project
     <div className="member-list">
       {project.members.map((member) => (
         <div className="member-row" key={`${project.id}-${member.memberId}`}>
-          {member.avatarUrl ? (
-            <img src={member.avatarUrl} alt="" />
-          ) : (
-            <div className="member-avatar-initials" aria-hidden="true">
-              {member.name
-                .trim()
-                .split(/\s+/)
-                .slice(0, 2)
-                .map((part) => part[0])
-                .join('')
-                .toUpperCase()}
-            </div>
-          )}
+          <Avatar src={member.avatarUrl} name={member.name} />
           <div>
             <strong>{member.name}</strong>
+            {member.memberId === project.ownerId && (
+              <small className="member-owner">Responsável</small>
+            )}
             <span>{member.role}</span>
+            {member.communityId && onOpenMember && (
+              <Button
+                variant="ghost"
+                size="small"
+                aria-label={`Ver perfil de ${member.name}`}
+                onClick={() => onOpenMember(member.communityId!)}
+              >
+                Ver perfil
+              </Button>
+            )}
             {forming && member.memberId === profileId && (
               <label className="field">
                 <span>Sua função na squad</span>

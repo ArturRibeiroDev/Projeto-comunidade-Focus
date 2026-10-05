@@ -19,6 +19,8 @@ import { appearsInCatalogue } from './domain/projectLifecycle';
 import { validProjectPlan } from './domain/projectSchedule';
 import { AuthPage } from './pages/AuthPage';
 import { CatalogPage } from './pages/CatalogPage';
+import { CommunityPage } from './pages/CommunityPage';
+import { PublicMemberDrawer } from './components/profile/PublicMemberDrawer';
 import { CreateProjectPage } from './pages/CreateProjectPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { MyProjectsPage } from './pages/MyProjectsPage';
@@ -103,6 +105,7 @@ function App() {
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [profileEditRequest, setProfileEditRequest] = useState(0);
   const [discordRefresh, setDiscordRefresh] = useState(0);
+  const [publicMemberKey, setPublicMemberKey] = useState<string>();
   const sessionUserRef = useRef<string | undefined>(undefined);
   const actionInFlight = useRef(false);
   const userId = session?.user.id;
@@ -200,10 +203,12 @@ function App() {
     setProfileDraft(nextProfile);
     setAccount(nextAccount);
     setGamification(nextGamification);
+    setDiscordRefresh((value) => value + 1);
   }, []);
 
   useEffect(() => {
     if (!userId) {
+      setPublicMemberKey(undefined);
       setProfile(null);
       setProfileDraft(null);
       setAccount(null);
@@ -492,8 +497,24 @@ function App() {
           projects={catalogue}
         />
       )}
+      {activeView === 'community' && (
+        <CommunityPage
+          areas={skillOptions.areas}
+          refreshKey={discordRefresh}
+          onOpenMember={setPublicMemberKey}
+        />
+      )}
+      {publicMemberKey && (
+        <PublicMemberDrawer
+          key={`${userId}-${publicMemberKey}`}
+          memberKey={publicMemberKey}
+          refreshKey={discordRefresh}
+          onClose={() => setPublicMemberKey(undefined)}
+        />
+      )}
       {activeView === 'catalog' && (
         <CatalogPage
+          onOpenMember={setPublicMemberKey}
           onMembersChanged={refreshProjects}
           canManageDiscord={account.platform_role === 'ADMIN'}
           discordRefresh={discordRefresh}

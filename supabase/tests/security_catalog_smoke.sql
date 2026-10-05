@@ -13,7 +13,7 @@ declare browser_functions text[] := array[
   'admin_save_template', 'admin_set_template_archived', 'discord_request_resync', 'discord_retry_event',
   'admin_discord_overview', 'request_project_join', 'decide_project_join_request',
   'cancel_project_join_request', 'leave_project', 'get_project_discord_readiness', 'get_my_gamification',
-  'remove_project_member', 'update_my_project_role'
+  'remove_project_member', 'update_my_project_role', 'list_community_members', 'get_community_member'
 ];
 begin
   for t in select oid, relname, relrowsecurity from pg_class
