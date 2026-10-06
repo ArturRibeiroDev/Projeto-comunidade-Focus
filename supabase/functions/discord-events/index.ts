@@ -124,7 +124,7 @@ async function loadProcessingContext(
     admin.from('project_members').select('user_id,main_role').eq('project_id', projectId),
     admin
       .from('project_integrations')
-      .select('external_id')
+      .select('external_id,external_name')
       .eq('project_id', projectId)
       .eq('provider', 'discord')
       .maybeSingle(),
@@ -167,7 +167,7 @@ async function loadProcessingContext(
     botId,
     project: projectResult.data as ProjectData,
     members,
-    integration: integrationResult.data ?? { external_id: null },
+    integration: integrationResult.data ?? { external_id: null, external_name: null },
     event,
     api,
   };

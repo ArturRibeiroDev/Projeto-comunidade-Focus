@@ -26,16 +26,16 @@ const VIEW_CHANNEL = 1024;
 const SEND_MESSAGES = 2048;
 const READ_HISTORY = 65536;
 
-export function channelName(name: string, projectId: string): string {
+export function channelName(name: string): string {
   const slug = name
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
-    .slice(0, 70)
+    .slice(0, 94)
     .replace(/-$/g, '');
-  return `squad-${slug || 'projeto'}-${projectId.replace(/-/g, '').slice(0, 8)}`;
+  return `squad-${slug || 'projeto'}`;
 }
 
 export function channelTopic(projectId: string): string {

@@ -37,6 +37,7 @@ export type SquadMember = {
 
 export type IntegrationData = {
   external_id: string | null;
+  external_name: string | null;
 };
 
 export type ProcessContext = {
@@ -255,12 +256,13 @@ export async function processDiscordEvent(context: ProcessContext): Promise<void
     (overwrite) => overwrite.type === 1 && overwrite.id !== context.botId,
   );
   let channelId = context.integration.external_id;
+  let channelLabel = context.integration.external_name;
 
   if (report.issues.some((issue) => issue.reason === 'guild_check_failed')) {
     const summary = logDiagnostics(context, report) ?? 'Falha ao validar membros no Discord';
     await context.saveIntegration({
       external_id: channelId,
-      external_name: channelId ? channelName(project.name, project.id) : null,
+      external_name: channelLabel,
       status: 'FAILED',
       member_count: members.length,
       synced_count: 0,
@@ -271,33 +273,35 @@ export async function processDiscordEvent(context: ProcessContext): Promise<void
 
   if (!channelId) {
     const channels = await api.guildChannels(guildId);
-    channelId =
-      channels.find(
-        (channel) =>
-          channel.type === 0 &&
-          // Preserve recovery of channels created before the public brand changed.
-          (channel.topic === channelTopic(project.id) ||
-            channel.topic === `FocusEdu project:${project.id}`) &&
-          [context.activeCategoryId, context.archiveCategoryId].includes(channel.parent_id ?? ''),
-      )?.id ?? null;
+    const recovered = channels.find(
+      (channel) =>
+        channel.type === 0 &&
+        // Preserve recovery of channels created before the public brand changed.
+        (channel.topic === channelTopic(project.id) ||
+          channel.topic === `FocusEdu project:${project.id}`) &&
+        [context.activeCategoryId, context.archiveCategoryId].includes(channel.parent_id ?? ''),
+    );
+    channelId = recovered?.id ?? null;
+    channelLabel = recovered?.name ?? null;
   }
 
   const shouldCreate = Boolean(project.started_at) && event.event_type !== 'PROJECT_CANCELLED';
   if (!channelId && shouldCreate) {
     const created = await api.createChannel(
       guildId,
-      channelName(project.name, project.id),
+      channelName(project.name),
       channelTopic(project.id),
       categoryId,
       initialOverwrites,
     );
     channelId = created.id;
+    channelLabel = created.name;
   }
 
   if (channelId) {
     await context.saveIntegration({
       external_id: channelId,
-      external_name: channelName(project.name, project.id),
+      external_name: channelLabel,
       status: 'PENDING',
       member_count: members.length,
       synced_count: 0,
@@ -320,7 +324,7 @@ export async function processDiscordEvent(context: ProcessContext): Promise<void
       const summary = diagnostic ?? 'Falha ao aplicar permissões Discord';
       await context.saveIntegration({
         external_id: channelId,
-        external_name: channelName(project.name, project.id),
+        external_name: channelLabel,
         status: 'FAILED',
         member_count: members.length,
         synced_count: report.overwritesApplied,
@@ -343,7 +347,7 @@ export async function processDiscordEvent(context: ProcessContext): Promise<void
 
   await context.saveIntegration({
     external_id: channelId,
-    external_name: channelId ? channelName(project.name, project.id) : null,
+    external_name: channelLabel,
     status: archived ? 'ARCHIVED' : readOnly ? 'READ_ONLY' : channelId ? 'ACTIVE' : 'PENDING',
     member_count: members.length,
     synced_count: report.overwritesApplied,

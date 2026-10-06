@@ -1,4 +1,10 @@
 begin;
+-- The smoke owns these limits only until ROLLBACK; later assertions must not depend on remote defaults.
+update public.platform_settings
+set max_owned_open_projects_per_user = 2,
+    max_project_creations_per_day = 3,
+    max_projects_joined_simultaneously = 5
+where singleton;
 create temp table admin_smoke_baseline(user_count bigint) on commit drop;
 insert into admin_smoke_baseline select count(*) from public.platform_accounts;
 grant select on admin_smoke_baseline to authenticated;
@@ -32,7 +38,8 @@ begin
   if not exists (select 1 from public.projects where id = first_project and moderation_status = 'PENDING') then
     raise exception 'Community Project não começou pendente';
   end if;
-  if not exists (select 1 from public.project_members where project_id = first_project and user_id = auth.uid()) then
+  if not exists (select 1 from public.project_members m join public.projects p on p.id = m.project_id
+    where m.project_id = first_project and m.user_id = auth.uid() and p.owner_id = auth.uid() and m.main_role = 'Backend') then
     raise exception 'Owner não é membro da squad';
   end if;
   begin
@@ -62,19 +69,49 @@ begin
   end;
 
   second_project := public.create_planned_project_from_template('00000000-0000-4000-8000-000000000001', null, null, 'Backend');
-  third_project := public.create_planned_project_from_template('00000000-0000-4000-8000-000000000002', null, null, 'QA');
+  if not exists (select 1 from public.projects p join public.project_members m on m.project_id = p.id
+    where p.id = second_project and p.owner_id = auth.uid() and p.status = 'FORMING'
+      and m.user_id = auth.uid() and m.main_role = 'Backend') then
+    raise exception 'Segundo projeto ou owner membership ausente';
+  end if;
+  if (select count(*) from public.projects where owner_id = auth.uid() and status in ('FORMING', 'ACTIVE')) <> 2 then
+    raise exception 'Primeiro e segundo projetos não ocuparam os dois slots';
+  end if;
   begin
     perform public.create_planned_project_from_template('00000000-0000-4000-8000-000000000003', null, null, 'Backend');
-    raise exception 'Limite de ownership não funcionou';
+    raise exception 'Terceiro projeto não foi bloqueado pelo limite de ownership 2';
   exception when others then
-    if sqlerrm not like 'OWNED_PROJECT_LIMIT:%' then raise; end if;
+    if sqlerrm <> 'OWNED_PROJECT_LIMIT:2' then raise; end if;
   end;
   perform public.transition_project(second_project, 'CANCELLED');
+  if (select count(*) from public.projects where owner_id = auth.uid() and status in ('FORMING', 'ACTIVE')) <> 1 then
+    raise exception 'Cancelamento não liberou slot de ownership';
+  end if;
+  third_project := public.create_planned_project_from_template('00000000-0000-4000-8000-000000000002', null, null, 'QA');
+  if not exists (select 1 from public.projects p join public.project_members m on m.project_id = p.id
+    where p.id = third_project and p.owner_id = auth.uid() and p.status = 'FORMING'
+      and m.user_id = auth.uid() and m.main_role = 'QA') then
+    raise exception 'Projeto de reposição não ocupou o slot liberado';
+  end if;
+end;
+$$;
+
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000003', true);
+do $$
+declare daily_project uuid;
+begin
+  for attempt in 1..3 loop
+    daily_project := public.create_planned_project_from_template('00000000-0000-4000-8000-000000000001', null, null, 'Backend');
+    if not exists (select 1 from public.projects where id = daily_project and owner_id = auth.uid()) then
+      raise exception 'Criação diária permitida não foi persistida';
+    end if;
+    if attempt < 3 then perform public.transition_project(daily_project, 'CANCELLED'); end if;
+  end loop;
   begin
-    perform public.create_planned_project_from_template('00000000-0000-4000-8000-000000000003', null, null, 'Backend');
+    perform public.create_planned_project_from_template('00000000-0000-4000-8000-000000000001', null, null, 'Backend');
     raise exception 'Limite de 24h não funcionou';
   exception when others then
-    if sqlerrm not like 'DAILY_PROJECT_LIMIT:%' then raise; end if;
+    if sqlerrm <> 'DAILY_PROJECT_LIMIT:3' then raise; end if;
   end;
 end;
 $$;

@@ -30,9 +30,9 @@ function context(overrides: Partial<ProcessContext> = {}) {
   const api = {
     guildChannels: vi.fn(async (_guild: string): Promise<DiscordChannel[]> => []),
     guildMember: vi.fn(async (_guild: string, id: string) => id !== missingDiscordId),
-    createChannel: vi.fn(async (..._args: Parameters<ProcessContext['api']['createChannel']>) => ({
+    createChannel: vi.fn(async (...args: Parameters<ProcessContext['api']['createChannel']>) => ({
       id: 'channel-1',
-      name: 'squad-test',
+      name: args[1],
       type: 0,
     })),
     updateChannel: vi.fn(async () => {}),
@@ -62,7 +62,7 @@ function context(overrides: Partial<ProcessContext> = {}) {
       { name: 'Maria', role: 'QA', discordId: missingDiscordId },
       { name: 'João', role: 'UX', discordId: null },
     ],
-    integration: { external_id: null },
+    integration: { external_id: null, external_name: null },
     event: { id: 'event-1', event_type: 'PROJECT_STARTED', external_message_id: null },
     api,
     saveIntegration,
@@ -84,11 +84,13 @@ async function captureSyncError(value: ProcessContext): Promise<DiscordSyncError
 
 describe('Discord channel mapping', () => {
   it('creates a stable sanitized name', () => {
-    expect(channelName('Sistema de Autenticação!', projectId)).toBe(
-      'squad-sistema-de-autenticacao-a31f1234',
-    );
-    expect(channelName('***', projectId)).toBe('squad-projeto-a31f1234');
-    expect(channelName('x'.repeat(200), projectId).length).toBeLessThanOrEqual(85);
+    expect(channelName('Sistema de Autenticação!')).toBe('squad-sistema-de-autenticacao');
+    expect(channelName('Dashboard de Dados Públicos')).toBe('squad-dashboard-de-dados-publicos');
+    expect(channelName('Sistema Financeiro Pessoal')).toBe('squad-sistema-financeiro-pessoal');
+    expect(channelName('  Áreas --- & Dados  ')).toBe('squad-areas-dados');
+    expect(channelName('***')).toBe('squad-projeto');
+    expect(channelName('x'.repeat(200)).length).toBe(100);
+    expect(channelName('x'.repeat(93) + '-resto')).toBe(`squad-${'x'.repeat(93)}`);
   });
 
   it('keeps everyone private and members read-only when archived', () => {
@@ -114,6 +116,9 @@ describe('Discord event processing', () => {
     const { value, api, saveIntegration } = context();
     await processDiscordEvent(value);
     expect(api.createChannel).toHaveBeenCalledTimes(1);
+    expect(api.createChannel.mock.calls[0][1]).toBe('squad-sistema-de-autenticacao');
+    expect(api.createChannel.mock.calls[0][1]).not.toContain(projectId.slice(0, 8));
+    expect(api.createChannel.mock.calls[0][2]).toBe(channelTopic(projectId));
     expect(api.createChannel.mock.calls[0][4]).toEqual(
       expect.arrayContaining([expect.objectContaining({ id: 'guild', deny: '1024' })]),
     );
@@ -137,6 +142,7 @@ describe('Discord event processing', () => {
     expect(saveIntegration).toHaveBeenLastCalledWith(
       expect.objectContaining({
         external_id: 'channel-1',
+        external_name: 'squad-sistema-de-autenticacao',
         status: 'ACTIVE',
         member_count: 3,
         synced_count: 1,
@@ -153,13 +159,23 @@ describe('Discord event processing', () => {
   });
 
   it('reuses the saved channel on resync without creating or posting', async () => {
-    const { value, api } = context({
-      integration: { external_id: 'existing' },
+    const { value, api, saveIntegration } = context({
+      integration: {
+        external_id: 'existing',
+        external_name: 'squad-sistema-de-autenticacao-a31f1234',
+      },
       event: { id: 'event-2', event_type: 'DISCORD_RESYNC_REQUESTED', external_message_id: null },
     });
     await processDiscordEvent(value);
     expect(api.createChannel).not.toHaveBeenCalled();
+    expect(api.guildChannels).not.toHaveBeenCalled();
     expect(api.updateChannel).toHaveBeenCalledWith('existing', 'active', channelTopic(projectId));
+    expect(saveIntegration).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        external_id: 'existing',
+        external_name: 'squad-sistema-de-autenticacao-a31f1234',
+      }),
+    );
     expect(api.putChannelPermission).toHaveBeenCalledWith(
       'existing',
       expect.objectContaining({ id: connectedDiscordId, type: 1 }),
@@ -168,11 +184,18 @@ describe('Discord event processing', () => {
   });
 
   it('recovers a channel after a crash before database persistence', async () => {
-    const { value, api } = context();
+    const { value, api, saveIntegration } = context();
     api.guildChannels.mockResolvedValueOnce([
       {
+        id: 'other-project',
+        name: 'squad-sistema-de-autenticacao',
+        type: 0,
+        parent_id: 'active',
+        topic: 'FocusAcademy project:another-project',
+      },
+      {
         id: 'recovered',
-        name: 'squad-test',
+        name: 'squad-sistema-de-autenticacao-a31f1234',
         type: 0,
         parent_id: 'active',
         topic: `FocusEdu project:${projectId}`,
@@ -181,6 +204,34 @@ describe('Discord event processing', () => {
     await processDiscordEvent(value);
     expect(api.createChannel).not.toHaveBeenCalled();
     expect(api.updateChannel).toHaveBeenCalledWith('recovered', 'active', channelTopic(projectId));
+    expect(saveIntegration).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        external_id: 'recovered',
+        external_name: 'squad-sistema-de-autenticacao-a31f1234',
+      }),
+    );
+  });
+
+  it('reuses a newly created channel by external ID on the next sync', async () => {
+    const { value, api, saveIntegration } = context();
+    await processDiscordEvent(value);
+    value.integration = {
+      external_id: 'channel-1',
+      external_name: 'squad-sistema-de-autenticacao',
+    };
+    value.event = {
+      id: 'event-resync',
+      event_type: 'DISCORD_RESYNC_REQUESTED',
+      external_message_id: null,
+    };
+    await processDiscordEvent(value);
+    expect(api.createChannel).toHaveBeenCalledTimes(1);
+    expect(saveIntegration).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        external_id: 'channel-1',
+        external_name: 'squad-sistema-de-autenticacao',
+      }),
+    );
   });
 
   it('does not create a channel for cancellation before start', async () => {
@@ -198,7 +249,7 @@ describe('Discord event processing', () => {
   it('moves archived channels and removes member send permission', async () => {
     const { value, api } = context({
       project: { ...context().value.project, status: 'ARCHIVED' },
-      integration: { external_id: 'existing' },
+      integration: { external_id: 'existing', external_name: 'squad-legado' },
       event: { id: 'event-4', event_type: 'PROJECT_ARCHIVED', external_message_id: null },
     });
     await processDiscordEvent(value);
@@ -211,7 +262,7 @@ describe('Discord event processing', () => {
 
   it('does not repost an already recorded completion message', async () => {
     const { value, api } = context({
-      integration: { external_id: 'existing' },
+      integration: { external_id: 'existing', external_name: 'squad-legado' },
       event: { id: 'event-5', event_type: 'PROJECT_COMPLETED', external_message_id: 'sent' },
     });
     await processDiscordEvent(value);
@@ -273,7 +324,7 @@ describe('Discord event processing', () => {
 
   it('keeps resync idempotent while reapplying the missing member overwrite', async () => {
     const { value, api } = context({
-      integration: { external_id: 'existing' },
+      integration: { external_id: 'existing', external_name: 'squad-legado' },
       event: { id: 'event-6', event_type: 'DISCORD_RESYNC_REQUESTED', external_message_id: null },
       members: [{ name: 'Artur', role: 'Backend', discordId: connectedDiscordId }],
     });
