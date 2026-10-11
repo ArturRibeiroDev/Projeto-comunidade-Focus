@@ -44,7 +44,7 @@ import {
   updateProject,
 } from './services/projectService';
 import { getPlatformAccount } from './services/adminService';
-import { friendlyProjectError } from './services/projectErrors';
+import { friendlyProjectCreationError, friendlyProjectError } from './services/projectErrors';
 import { processDiscordEvents } from './services/discordService';
 import { getTemplates } from './services/templateService';
 import type {
@@ -276,6 +276,8 @@ function App() {
     action: () => Promise<void>,
     title: string,
     message: string,
+    errorMessage: (cause: unknown) => string = (cause) =>
+      friendlyProjectError(cause instanceof Error ? cause.message : 'Tente novamente.'),
   ): Promise<boolean> => {
     if (actionInFlight.current || !session) return false;
     actionInFlight.current = true;
@@ -286,10 +288,7 @@ function App() {
       showToast(title, message);
       return true;
     } catch (cause) {
-      showToast(
-        'Ação não concluída',
-        friendlyProjectError(cause instanceof Error ? cause.message : 'Tente novamente.'),
-      );
+      showToast('Ação não concluída', errorMessage(cause));
       return false;
     } finally {
       actionInFlight.current = false;
@@ -340,6 +339,7 @@ function App() {
       },
       'Projeto criado',
       'Uma nova squad foi criada e adicionada aos seus projetos.',
+      friendlyProjectCreationError,
     );
   };
   const create = (event: FormEvent<HTMLFormElement>) => {
@@ -362,6 +362,7 @@ function App() {
       },
       'Projeto criado',
       'Seu projeto aguarda revisão e já aparece em Meus projetos.',
+      friendlyProjectCreationError,
     );
   };
   const saveProfile = async (file?: File): Promise<boolean> => {
