@@ -17,6 +17,10 @@ import {
 const projectId = 'a31f1234-1111-4111-8111-123456789abc';
 const connectedDiscordId = '111111111111111111';
 const missingDiscordId = '222222222222222222';
+const existingBothChannels = {
+  text: { external_id: 'existing', external_name: 'squad-legado' },
+  voice: { external_id: 'voice-existing', external_name: 'squad-legado' },
+};
 
 beforeEach(() => {
   vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -31,16 +35,17 @@ function context(overrides: Partial<ProcessContext> = {}) {
     guildChannels: vi.fn(async (_guild: string): Promise<DiscordChannel[]> => []),
     guildMember: vi.fn(async (_guild: string, id: string) => id !== missingDiscordId),
     createChannel: vi.fn(async (...args: Parameters<ProcessContext['api']['createChannel']>) => ({
-      id: 'channel-1',
+      id: args[5] === 2 ? 'voice-1' : 'channel-1',
       name: args[1],
-      type: 0,
+      type: args[5] ?? 0,
     })),
     updateChannel: vi.fn(async () => {}),
     putChannelPermission: vi.fn(async () => {}),
     sendMessage: vi.fn(async () => 'message-1'),
   };
-  const saveIntegration = vi.fn(async () => {});
+  const saveIntegration = vi.fn<ProcessContext['saveIntegration']>(async () => {});
   const saveMessageId = vi.fn(async () => {});
+  const reserveVoiceCreation = vi.fn(async () => true);
   const value: ProcessContext = {
     guildId: 'guild',
     activeCategoryId: 'active',
@@ -62,14 +67,18 @@ function context(overrides: Partial<ProcessContext> = {}) {
       { name: 'Maria', role: 'QA', discordId: missingDiscordId },
       { name: 'João', role: 'UX', discordId: null },
     ],
-    integration: { external_id: null, external_name: null },
+    integration: {
+      text: { external_id: null, external_name: null },
+      voice: { external_id: null, external_name: null },
+    },
     event: { id: 'event-1', event_type: 'PROJECT_STARTED', external_message_id: null },
     api,
     saveIntegration,
     saveMessageId,
+    reserveVoiceCreation,
     ...overrides,
   };
-  return { value, api, saveIntegration, saveMessageId };
+  return { value, api, saveIntegration, saveMessageId, reserveVoiceCreation };
 }
 
 async function captureSyncError(value: ProcessContext): Promise<DiscordSyncError> {
@@ -112,10 +121,10 @@ describe('Discord channel mapping', () => {
 });
 
 describe('Discord event processing', () => {
-  it('creates one private channel, syncs the connected guild member, and sends the first message', async () => {
+  it('creates private text and voice channels, syncs the guild member, and sends the first message', async () => {
     const { value, api, saveIntegration } = context();
     await processDiscordEvent(value);
-    expect(api.createChannel).toHaveBeenCalledTimes(1);
+    expect(api.createChannel).toHaveBeenCalledTimes(2);
     expect(api.createChannel.mock.calls[0][1]).toBe('squad-sistema-de-autenticacao');
     expect(api.createChannel.mock.calls[0][1]).not.toContain(projectId.slice(0, 8));
     expect(api.createChannel.mock.calls[0][2]).toBe(channelTopic(projectId));
@@ -125,6 +134,7 @@ describe('Discord event processing', () => {
     expect(api.createChannel.mock.calls[0][4]).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ id: connectedDiscordId })]),
     );
+    expect(api.createChannel.mock.calls[1][5]).toBe(2);
     expect(api.guildMember).toHaveBeenCalledWith('guild', connectedDiscordId);
     expect(api.putChannelPermission).toHaveBeenCalledWith(
       'channel-1',
@@ -139,8 +149,9 @@ describe('Discord event processing', () => {
       'channel-1',
       expect.objectContaining({ id: missingDiscordId }),
     );
-    expect(saveIntegration).toHaveBeenLastCalledWith(
+    expect(saveIntegration).toHaveBeenCalledWith(
       expect.objectContaining({
+        channel_kind: 'DISCORD_TEXT_CHANNEL',
         external_id: 'channel-1',
         external_name: 'squad-sistema-de-autenticacao',
         status: 'ACTIVE',
@@ -149,7 +160,7 @@ describe('Discord event processing', () => {
         last_error: expect.stringContaining('no_discord_integration:1'),
       }),
     );
-    expect(saveIntegration).toHaveBeenLastCalledWith(
+    expect(saveIntegration).toHaveBeenCalledWith(
       expect.objectContaining({ last_error: expect.stringContaining('not_in_guild:1') }),
     );
     expect(api.sendMessage).toHaveBeenCalledTimes(1);
@@ -161,8 +172,14 @@ describe('Discord event processing', () => {
   it('reuses the saved channel on resync without creating or posting', async () => {
     const { value, api, saveIntegration } = context({
       integration: {
-        external_id: 'existing',
-        external_name: 'squad-sistema-de-autenticacao-a31f1234',
+        text: {
+          external_id: 'existing',
+          external_name: 'squad-sistema-de-autenticacao-a31f1234',
+        },
+        voice: {
+          external_id: 'voice-existing',
+          external_name: 'squad-sistema-de-autenticacao',
+        },
       },
       event: { id: 'event-2', event_type: 'DISCORD_RESYNC_REQUESTED', external_message_id: null },
     });
@@ -170,8 +187,9 @@ describe('Discord event processing', () => {
     expect(api.createChannel).not.toHaveBeenCalled();
     expect(api.guildChannels).not.toHaveBeenCalled();
     expect(api.updateChannel).toHaveBeenCalledWith('existing', 'active', channelTopic(projectId));
-    expect(saveIntegration).toHaveBeenLastCalledWith(
+    expect(saveIntegration).toHaveBeenCalledWith(
       expect.objectContaining({
+        channel_kind: 'DISCORD_TEXT_CHANNEL',
         external_id: 'existing',
         external_name: 'squad-sistema-de-autenticacao-a31f1234',
       }),
@@ -202,10 +220,12 @@ describe('Discord event processing', () => {
       },
     ]);
     await processDiscordEvent(value);
-    expect(api.createChannel).not.toHaveBeenCalled();
+    expect(api.createChannel).toHaveBeenCalledTimes(1);
+    expect(api.createChannel.mock.calls[0][5]).toBe(2);
     expect(api.updateChannel).toHaveBeenCalledWith('recovered', 'active', channelTopic(projectId));
-    expect(saveIntegration).toHaveBeenLastCalledWith(
+    expect(saveIntegration).toHaveBeenCalledWith(
       expect.objectContaining({
+        channel_kind: 'DISCORD_TEXT_CHANNEL',
         external_id: 'recovered',
         external_name: 'squad-sistema-de-autenticacao-a31f1234',
       }),
@@ -216,8 +236,8 @@ describe('Discord event processing', () => {
     const { value, api, saveIntegration } = context();
     await processDiscordEvent(value);
     value.integration = {
-      external_id: 'channel-1',
-      external_name: 'squad-sistema-de-autenticacao',
+      text: { external_id: 'channel-1', external_name: 'squad-sistema-de-autenticacao' },
+      voice: { external_id: 'voice-1', external_name: 'squad-sistema-de-autenticacao' },
     };
     value.event = {
       id: 'event-resync',
@@ -225,9 +245,10 @@ describe('Discord event processing', () => {
       external_message_id: null,
     };
     await processDiscordEvent(value);
-    expect(api.createChannel).toHaveBeenCalledTimes(1);
-    expect(saveIntegration).toHaveBeenLastCalledWith(
+    expect(api.createChannel).toHaveBeenCalledTimes(2);
+    expect(saveIntegration).toHaveBeenCalledWith(
       expect.objectContaining({
+        channel_kind: 'DISCORD_TEXT_CHANNEL',
         external_id: 'channel-1',
         external_name: 'squad-sistema-de-autenticacao',
       }),
@@ -246,10 +267,146 @@ describe('Discord event processing', () => {
     );
   });
 
+  it('does not recover voice by name, even in the project category', async () => {
+    const { value, api } = context();
+    api.guildChannels.mockResolvedValue([
+      { id: 'wrong-voice', name: channelName(value.project.name), type: 2, parent_id: 'active' },
+    ]);
+    await processDiscordEvent(value);
+    expect(api.createChannel).toHaveBeenCalledTimes(2);
+    expect(api.updateChannel.mock.calls.some(([id]) => id === 'wrong-voice')).toBe(false);
+    expect(api.putChannelPermission.mock.calls.some(([id]) => id === 'wrong-voice')).toBe(false);
+  });
+
+  it.each(['text', 'voice'] as const)(
+    'creates only the missing resource when %s exists',
+    async (existing) => {
+      const { value, api, reserveVoiceCreation } = context({
+        integration: { [existing]: existingBothChannels[existing] },
+      });
+      await processDiscordEvent(value);
+      expect(api.createChannel).toHaveBeenCalledTimes(1);
+      expect(api.createChannel.mock.calls[0][5] ?? 0).toBe(existing === 'text' ? 2 : 0);
+      expect(reserveVoiceCreation).toHaveBeenCalledTimes(existing === 'text' ? 1 : 0);
+      expect(api.updateChannel.mock.calls.map(([id]) => id)).toContain(
+        existingBothChannels[existing].external_id,
+      );
+    },
+  );
+
+  it('preserves a legacy external_id as text and creates only voice', async () => {
+    const { value, api } = context({
+      integration: { external_id: 'legacy-text', external_name: 'legacy-name' },
+    });
+    await processDiscordEvent(value);
+    expect(api.createChannel).toHaveBeenCalledTimes(1);
+    expect(api.createChannel.mock.calls[0][5]).toBe(2);
+    expect(api.updateChannel).toHaveBeenCalledWith(
+      'legacy-text',
+      'active',
+      channelTopic(projectId),
+    );
+  });
+
+  it('persists each created ID before subsequent Discord operations', async () => {
+    const { value, api, saveIntegration, reserveVoiceCreation } = context();
+    await processDiscordEvent(value);
+    const saves = saveIntegration.mock.calls;
+    const textSave = saves.findIndex(([row]) => row.external_id === 'channel-1');
+    const voiceSave = saves.findIndex(([row]) => row.external_id === 'voice-1');
+    expect(saveIntegration.mock.invocationCallOrder[textSave]).toBeLessThan(
+      api.createChannel.mock.invocationCallOrder[1],
+    );
+    expect(reserveVoiceCreation.mock.invocationCallOrder[0]).toBeLessThan(
+      api.createChannel.mock.invocationCallOrder[1],
+    );
+    expect(saveIntegration.mock.invocationCallOrder[voiceSave]).toBeLessThan(
+      api.updateChannel.mock.invocationCallOrder[0],
+    );
+  });
+
+  it.each(['text', 'voice'] as const)(
+    'retries a %s permission failure using both persisted IDs without duplicates',
+    async (failedKind) => {
+      const { value, api, saveIntegration } = context();
+      saveIntegration.mockImplementation(
+        async (row: Parameters<ProcessContext['saveIntegration']>[0]) => {
+          value.integration[row.channel_kind === 'DISCORD_TEXT_CHANNEL' ? 'text' : 'voice'] = row;
+        },
+      );
+      api.putChannelPermission.mockImplementation(async (id, overwrite) => {
+        if (
+          id === (failedKind === 'text' ? 'channel-1' : 'voice-1') &&
+          overwrite.id === connectedDiscordId
+        ) {
+          throw new DiscordApiError(503);
+        }
+      });
+      await expect(processDiscordEvent(value)).rejects.toBeInstanceOf(DiscordSyncError);
+      expect(value.integration.text?.external_id).toBe('channel-1');
+      expect(value.integration.voice?.external_id).toBe('voice-1');
+      api.putChannelPermission.mockResolvedValue(undefined);
+      await processDiscordEvent(value);
+      expect(api.createChannel).toHaveBeenCalledTimes(2);
+      for (const channel_kind of ['DISCORD_TEXT_CHANNEL', 'DISCORD_VOICE_CHANNEL']) {
+        expect(saveIntegration).toHaveBeenCalledWith(
+          expect.objectContaining({ channel_kind, status: 'ACTIVE', synced_count: 1 }),
+        );
+      }
+    },
+  );
+
+  it.each(['response-lost', 'persistence-failed'])(
+    'blocks voice recreation after an uncertain creation (%s), including a new resync event',
+    async (failure) => {
+      const { value, api, saveIntegration, reserveVoiceCreation } = context({
+        integration: { text: existingBothChannels.text },
+      });
+      reserveVoiceCreation.mockResolvedValueOnce(true).mockResolvedValue(false);
+      if (failure === 'response-lost') {
+        api.createChannel.mockRejectedValueOnce(new Error('response lost after remote creation'));
+      } else {
+        saveIntegration.mockImplementation(
+          async (row: Parameters<ProcessContext['saveIntegration']>[0]) => {
+            if (row.channel_kind === 'DISCORD_VOICE_CHANNEL')
+              throw new Error('database unavailable');
+          },
+        );
+      }
+      await expect(processDiscordEvent(value)).rejects.toThrow();
+      await expect(processDiscordEvent(value)).rejects.toMatchObject({ retryable: false });
+      value.event = {
+        id: 'new-resync',
+        event_type: 'DISCORD_RESYNC_REQUESTED',
+        external_message_id: null,
+      };
+      await expect(processDiscordEvent(value)).rejects.toMatchObject({ retryable: false });
+      expect(api.createChannel).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('does not call Discord when the voice reservation fails to persist', async () => {
+    const { value, api, reserveVoiceCreation } = context({
+      integration: { text: existingBothChannels.text },
+    });
+    reserveVoiceCreation.mockRejectedValue(new Error('database unavailable'));
+    await expect(processDiscordEvent(value)).rejects.toThrow('database unavailable');
+    expect(api.createChannel).not.toHaveBeenCalled();
+  });
+
+  it('uses an operationally reconciled voice ID even when a previous creation was reserved', async () => {
+    const { value, api, reserveVoiceCreation } = context({ integration: existingBothChannels });
+    reserveVoiceCreation.mockResolvedValue(false);
+    await processDiscordEvent(value);
+    expect(reserveVoiceCreation).not.toHaveBeenCalled();
+    expect(api.createChannel).not.toHaveBeenCalled();
+    expect(api.updateChannel).toHaveBeenCalledWith('voice-existing', 'active', undefined);
+  });
+
   it('moves archived channels and removes member send permission', async () => {
     const { value, api } = context({
       project: { ...context().value.project, status: 'ARCHIVED' },
-      integration: { external_id: 'existing', external_name: 'squad-legado' },
+      integration: existingBothChannels,
       event: { id: 'event-4', event_type: 'PROJECT_ARCHIVED', external_message_id: null },
     });
     await processDiscordEvent(value);
@@ -262,7 +419,7 @@ describe('Discord event processing', () => {
 
   it('does not repost an already recorded completion message', async () => {
     const { value, api } = context({
-      integration: { external_id: 'existing', external_name: 'squad-legado' },
+      integration: existingBothChannels,
       event: { id: 'event-5', event_type: 'PROJECT_COMPLETED', external_message_id: 'sent' },
     });
     await processDiscordEvent(value);
@@ -284,8 +441,9 @@ describe('Discord event processing', () => {
     const error = await captureSyncError(value);
     expect(error.message).toContain('overwrite_failed_403');
     expect(error.retryable).toBe(false);
-    expect(saveIntegration).toHaveBeenLastCalledWith(
+    expect(saveIntegration).toHaveBeenCalledWith(
       expect.objectContaining({
+        channel_kind: 'DISCORD_TEXT_CHANNEL',
         external_id: 'channel-1',
         status: 'FAILED',
         member_count: 2,
@@ -324,7 +482,7 @@ describe('Discord event processing', () => {
 
   it('keeps resync idempotent while reapplying the missing member overwrite', async () => {
     const { value, api } = context({
-      integration: { external_id: 'existing', external_name: 'squad-legado' },
+      integration: existingBothChannels,
       event: { id: 'event-6', event_type: 'DISCORD_RESYNC_REQUESTED', external_message_id: null },
       members: [{ name: 'Artur', role: 'Backend', discordId: connectedDiscordId }],
     });
@@ -337,8 +495,9 @@ describe('Discord event processing', () => {
     );
     expect(api.createChannel).not.toHaveBeenCalled();
     expect(api.sendMessage).not.toHaveBeenCalled();
-    expect(memberCalls).toHaveLength(2);
-    expect(memberCalls[0][1]).toEqual(memberCalls[1][1]);
+    expect(memberCalls).toHaveLength(4);
+    expect(memberCalls[0][1]).toEqual(memberCalls[2][1]);
+    expect(memberCalls[1][1]).toEqual(memberCalls[3][1]);
   });
 });
 

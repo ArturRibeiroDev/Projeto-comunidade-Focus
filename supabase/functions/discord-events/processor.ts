@@ -1,8 +1,11 @@
 import {
   DiscordApiError,
   channelName,
-  channelOverwrites,
   channelTopic,
+  textChannelOverwrites,
+  textChannelTopic,
+  voiceChannelName,
+  voiceChannelOverwrites,
   type ChannelOverwrite,
   type DiscordChannel,
 } from './discord.ts';
@@ -36,6 +39,13 @@ export type SquadMember = {
 };
 
 export type IntegrationData = {
+  text?: ChannelIntegrationData;
+  voice?: ChannelIntegrationData;
+  external_id?: string | null;
+  external_name?: string | null;
+};
+
+export type ChannelIntegrationData = {
   external_id: string | null;
   external_name: string | null;
 };
@@ -56,15 +66,17 @@ export type ProcessContext = {
     createChannel: (
       guildId: string,
       name: string,
-      topic: string,
+      topic: string | null,
       parentId: string,
-      overwrites: ReturnType<typeof channelOverwrites>,
+      overwrites: ChannelOverwrite[],
+      type?: number,
     ) => Promise<DiscordChannel>;
-    updateChannel: (channelId: string, parentId: string, topic: string) => Promise<void>;
+    updateChannel: (channelId: string, parentId: string, topic?: string) => Promise<void>;
     putChannelPermission: (channelId: string, overwrite: ChannelOverwrite) => Promise<void>;
     sendMessage: (channelId: string, content: string, eventId: string) => Promise<string>;
   };
   saveIntegration: (data: {
+    channel_kind: 'DISCORD_TEXT_CHANNEL' | 'DISCORD_VOICE_CHANNEL';
     external_id: string | null;
     external_name: string | null;
     status: string;
@@ -73,6 +85,7 @@ export type ProcessContext = {
     last_error: string | null;
   }) => Promise<void>;
   saveMessageId: (id: string) => Promise<void>;
+  reserveVoiceCreation: () => Promise<boolean>;
 };
 
 type SyncIssueReason =
@@ -216,6 +229,19 @@ function messageFor(context: ProcessContext): string | null {
   return null;
 }
 
+function legacyTopic(projectId: string): string {
+  return `FocusEdu project:${projectId}`;
+}
+
+function isProjectTextChannel(channel: DiscordChannel, projectId: string): boolean {
+  return (
+    channel.type === 0 &&
+    [textChannelTopic(projectId), channelTopic(projectId), legacyTopic(projectId)].includes(
+      channel.topic ?? '',
+    )
+  );
+}
+
 export async function processDiscordEvent(context: ProcessContext): Promise<void> {
   const { api, project, event, guildId, members } = context;
   const connectedIds = [
@@ -247,22 +273,19 @@ export async function processDiscordEvent(context: ProcessContext): Promise<void
   const readOnly = project.status === 'CANCELLED' || project.status === 'ARCHIVED';
   const archived = project.status === 'ARCHIVED';
   const categoryId = archived ? context.archiveCategoryId : context.activeCategoryId;
-  const overwrites = channelOverwrites(guildId, context.botId, syncedIds, readOnly);
-  const initialOverwrites = channelOverwrites(guildId, context.botId, [], readOnly);
-  const baseOverwrites = overwrites.filter(
-    (overwrite) => overwrite.id === guildId || overwrite.id === context.botId,
-  );
-  const memberOverwrites = overwrites.filter(
-    (overwrite) => overwrite.type === 1 && overwrite.id !== context.botId,
-  );
-  let channelId = context.integration.external_id;
-  let channelLabel = context.integration.external_name;
+  let textChannelId =
+    context.integration.text?.external_id ?? context.integration.external_id ?? null;
+  let textChannelLabel =
+    context.integration.text?.external_name ?? context.integration.external_name ?? null;
+  let voiceChannelId = context.integration.voice?.external_id ?? null;
+  let voiceChannelLabel = context.integration.voice?.external_name ?? null;
 
   if (report.issues.some((issue) => issue.reason === 'guild_check_failed')) {
     const summary = logDiagnostics(context, report) ?? 'Falha ao validar membros no Discord';
     await context.saveIntegration({
-      external_id: channelId,
-      external_name: channelLabel,
+      channel_kind: 'DISCORD_TEXT_CHANNEL',
+      external_id: textChannelId,
+      external_name: textChannelLabel,
       status: 'FAILED',
       member_count: members.length,
       synced_count: 0,
@@ -271,35 +294,86 @@ export async function processDiscordEvent(context: ProcessContext): Promise<void
     throw new DiscordSyncError(summary, retryAfter(report.issues), retryableFailure(report.issues));
   }
 
-  if (!channelId) {
+  if (!textChannelId) {
     const channels = await api.guildChannels(guildId);
-    const recovered = channels.find(
+    const recoveredText = channels.find(
       (channel) =>
-        channel.type === 0 &&
-        // Preserve recovery of channels created before the public brand changed.
-        (channel.topic === channelTopic(project.id) ||
-          channel.topic === `FocusEdu project:${project.id}`) &&
+        isProjectTextChannel(channel, project.id) &&
         [context.activeCategoryId, context.archiveCategoryId].includes(channel.parent_id ?? ''),
     );
-    channelId = recovered?.id ?? null;
-    channelLabel = recovered?.name ?? null;
+    textChannelId = textChannelId ?? recoveredText?.id ?? null;
+    textChannelLabel = textChannelLabel ?? recoveredText?.name ?? null;
   }
 
   const shouldCreate = Boolean(project.started_at) && event.event_type !== 'PROJECT_CANCELLED';
-  if (!channelId && shouldCreate) {
+  if (!textChannelId && shouldCreate) {
     const created = await api.createChannel(
       guildId,
       channelName(project.name),
-      channelTopic(project.id),
+      textChannelTopic(project.id),
       categoryId,
-      initialOverwrites,
+      textChannelOverwrites(guildId, context.botId, [], readOnly),
     );
-    channelId = created.id;
-    channelLabel = created.name;
+    textChannelId = created.id;
+    textChannelLabel = created.name;
+  }
+  if (textChannelId) {
+    await context.saveIntegration({
+      channel_kind: 'DISCORD_TEXT_CHANNEL',
+      external_id: textChannelId,
+      external_name: textChannelLabel,
+      status: 'PENDING',
+      member_count: members.length,
+      synced_count: 0,
+      last_error: null,
+    });
+  }
+  if (!voiceChannelId && shouldCreate) {
+    // Voice has no project topic. Never repeat an uncertain POST or match by visible name.
+    if (!(await context.reserveVoiceCreation())) {
+      throw new DiscordSyncError(
+        'Criação de voz pendente de conferência operacional. Contate a administração antes de tentar novamente.',
+        0,
+        false,
+      );
+    }
+    const created = await api.createChannel(
+      guildId,
+      voiceChannelName(project.name),
+      null,
+      categoryId,
+      voiceChannelOverwrites(guildId, context.botId, [], readOnly),
+      2,
+    );
+    voiceChannelId = created.id;
+    voiceChannelLabel = created.name;
+    await context.saveIntegration({
+      channel_kind: 'DISCORD_VOICE_CHANNEL',
+      external_id: voiceChannelId,
+      external_name: voiceChannelLabel,
+      status: 'PENDING',
+      member_count: members.length,
+      synced_count: 0,
+      last_error: null,
+    });
   }
 
-  if (channelId) {
+  const syncChannel = async (
+    channelKind: 'DISCORD_TEXT_CHANNEL' | 'DISCORD_VOICE_CHANNEL',
+    channelId: string | null,
+    channelLabel: string | null,
+    overwrites: ChannelOverwrite[],
+    topic?: string,
+  ) => {
+    if (!channelId) return { synced: 0, failed: false };
+    const baseOverwrites = overwrites.filter(
+      (overwrite) => overwrite.id === guildId || overwrite.id === context.botId,
+    );
+    const memberOverwrites = overwrites.filter(
+      (overwrite) => overwrite.type === 1 && overwrite.id !== context.botId,
+    );
     await context.saveIntegration({
+      channel_kind: channelKind,
       external_id: channelId,
       external_name: channelLabel,
       status: 'PENDING',
@@ -307,27 +381,30 @@ export async function processDiscordEvent(context: ProcessContext): Promise<void
       synced_count: 0,
       last_error: diagnosticSummary(report),
     });
-    await api.updateChannel(channelId, categoryId, channelTopic(project.id));
+    await api.updateChannel(channelId, categoryId, topic);
     await Promise.all(
       baseOverwrites.map((overwrite) => api.putChannelPermission(channelId, overwrite)),
     );
+    let applied = 0;
     for (const overwrite of memberOverwrites) {
       try {
         await api.putChannelPermission(channelId, overwrite);
-        report.overwritesApplied += 1;
+        applied += 1;
       } catch (error) {
         report.issues.push(issueFromError('overwrite_failed', error));
       }
     }
+    report.overwritesApplied += applied;
     const diagnostic = logDiagnostics(context, report);
     if (report.issues.some((issue) => issue.reason === 'overwrite_failed')) {
       const summary = diagnostic ?? 'Falha ao aplicar permissões Discord';
       await context.saveIntegration({
+        channel_kind: channelKind,
         external_id: channelId,
         external_name: channelLabel,
         status: 'FAILED',
         member_count: members.length,
-        synced_count: report.overwritesApplied,
+        synced_count: applied,
         last_error: summary,
       });
       throw new DiscordSyncError(
@@ -336,21 +413,54 @@ export async function processDiscordEvent(context: ProcessContext): Promise<void
         retryableFailure(report.issues),
       );
     }
+    return { synced: applied, failed: false };
+  };
+
+  let textSynced = 0;
+  let voiceSynced = 0;
+  if (textChannelId) {
+    const result = await syncChannel(
+      'DISCORD_TEXT_CHANNEL',
+      textChannelId,
+      textChannelLabel,
+      textChannelOverwrites(guildId, context.botId, syncedIds, readOnly),
+      textChannelTopic(project.id),
+    );
+    textSynced = result.synced;
     const content = messageFor(context);
     if (content && !event.external_message_id) {
-      const messageId = await api.sendMessage(channelId, content, event.id);
+      const messageId = await api.sendMessage(textChannelId, content, event.id);
       await context.saveMessageId(messageId);
     }
+  }
+  if (voiceChannelId) {
+    const result = await syncChannel(
+      'DISCORD_VOICE_CHANNEL',
+      voiceChannelId,
+      voiceChannelLabel,
+      voiceChannelOverwrites(guildId, context.botId, syncedIds, readOnly),
+    );
+    voiceSynced = result.synced;
   } else {
     logDiagnostics(context, report);
   }
 
   await context.saveIntegration({
-    external_id: channelId,
-    external_name: channelLabel,
-    status: archived ? 'ARCHIVED' : readOnly ? 'READ_ONLY' : channelId ? 'ACTIVE' : 'PENDING',
+    channel_kind: 'DISCORD_TEXT_CHANNEL',
+    external_id: textChannelId,
+    external_name: textChannelLabel,
+    status: archived ? 'ARCHIVED' : readOnly ? 'READ_ONLY' : textChannelId ? 'ACTIVE' : 'PENDING',
     member_count: members.length,
-    synced_count: report.overwritesApplied,
+    synced_count: textSynced,
+    last_error: diagnosticSummary(report),
+  });
+  await context.saveIntegration({
+    channel_kind: 'DISCORD_VOICE_CHANNEL',
+    external_id: voiceChannelId,
+    external_name: voiceChannelLabel,
+    status: archived ? 'ARCHIVED' : readOnly ? 'READ_ONLY' : voiceChannelId ? 'ACTIVE' : 'PENDING',
+    member_count: members.length,
+    synced_count: voiceSynced,
     last_error: diagnosticSummary(report),
   });
 }

@@ -79,6 +79,10 @@ Nao ha HIGH local conhecido sem tratamento nesta rodada. Validar concorrencia ap
 | 15    | 202610020002_release_candidate_locking          | **Nova RC**: ordem de locks no approval e leases de 15 minutos.                                     |
 | 16    | 202610030001_project_participation_roles        | **Nova RC**: owner escolhe area canonica; join e approval validam o catalogo atual do projeto.       |
 | 17    | 202610030002_dashboard_public_data_backend_area | **Nova RC**: adiciona Backend somente ao template oficial Dashboard de Dados Publicos.               |
+| 18    | 202610040001_forming_member_management          | Remove membro em formação e atualiza propria função por RPC.                                        |
+| 19    | 202610040002_community_profiles                 | Perfil público autenticado por community_id e RPCs de comunidade.                                   |
+| 20    | 20261006204705_revoke_rls_auto_enable_execute   | Revoga EXECUTE automático de funções auxiliares sensíveis.                                          |
+| 21    | 202610100001_discord_voice_channels             | Separa integrações Discord por canal de texto/voz sem alterar IDs existentes.                       |
 
 ### Funcoes De Participacao E Dados Legados
 
@@ -250,6 +254,8 @@ Exportar envs do runner HTTP/E2E/load pelo armazenamento local/CI protegido. Loa
 Rodada Comunidade: aplicar manualmente `202610040002_community_profiles.sql` antes do frontend correspondente. Não foi aplicada remotamente. Nova coluna com UUID público independente em profiles; nenhuma policy de evidences/user_integrations é ampliada. `community_profiles_smoke.sql` testa paginação, filtros, histórico aprovado, ausência de dados privados/IDs Auth, acesso anônimo negado e perfil suspenso indisponível. A nova navegação depende dessas RPCs e não faz fallback para SELECT *.
 
 Rodada UX/estado: aplicar manualmente `202610040001_forming_member_management.sql` antes de publicar o frontend correspondente. Sem essa migration, os controles de membros retornam erro, não fazem fallback de escrita direta. `participation_roles_smoke.sql` cobre remoção por owner, auto-remoção negada, MEMBER sem permissão, função própria canônica, rejeição de texto arbitrário/escrita direta e bloqueios após ACTIVE. A migration não foi aplicada remotamente.
+
+Rodada onboarding/Discord voz: aplicar `202610100001_discord_voice_channels.sql` antes da Edge Function correspondente. Ela mantém registros existentes como texto e passa a criar/reconciliar voz em registro separado; sem essa migration, o worker novo não deve ser publicado.
 
 PASS: npm run test; npm run lint; npm run format:check; npm run build; npm audit --audit-level=moderate; git diff --check; npm run test:db:rc; npm run test:e2e:types; npm run test:e2e -- --project=local; npm run scan:dist.
 

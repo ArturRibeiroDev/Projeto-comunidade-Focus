@@ -55,3 +55,15 @@ export function availabilityHours(value: string): string {
   const match = value.match(/\d+/);
   return match ? match[0] : '';
 }
+
+export function isProfileComplete(profile: {
+  name: string;
+  primaryRole: string;
+  areas: string[];
+  technologies: string[];
+}): boolean {
+  const hasName = profile.name.trim().length > 0;
+  const hasPrimaryRole = profile.primaryRole.trim().length > 0 && profile.primaryRole !== 'Outra';
+  const hasSkillContext = profile.areas.length > 0 || profile.technologies.length > 0;
+  return hasName && hasPrimaryRole && hasSkillContext;
+}

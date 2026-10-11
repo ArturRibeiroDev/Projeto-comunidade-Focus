@@ -122,6 +122,7 @@ export function DashboardPage({
               <ProjectCard
                 key={project.id}
                 onSelect={() => onSelectProject(project.id)}
+                profile={profile}
                 project={project}
               />
             ))}

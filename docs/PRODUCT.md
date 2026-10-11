@@ -43,6 +43,10 @@ Os escopos oficiais são registros `ProjectTemplate`; cada squad usa um `Project
 
 ## Comunidade e perfis
 
+- No primeiro acesso autenticado, o app verifica se o perfil já tem nome, área principal e pelo
+  menos uma área ou tecnologia. Quando faltam esses dados, a pessoa passa por um onboarding simples
+  de perfil antes de entrar na navegação principal. O estado é inferido dos campos existentes, sem
+  flag persistida; perfis antigos suficientemente preenchidos entram direto.
 - Comunidade oferece descoberta de membros ativos para pessoas autenticadas, com busca por nome, área canônica e interesse. São 20 resultados por página, sem ranking, feed, mensagens ou seguidores.
 - Perfil público significa público para a comunidade autenticada, não para a internet. O drawer abre pela Comunidade, squad e solicitação de entrada; contém nome, foto, bio, áreas/tecnologias/interesses, links GitHub/LinkedIn já configurados e somente o indicador de Discord conectado.
 - Projetos e histórico públicos mostram até 20 registros recentes de projetos aprovados. Evidências pessoais sem projeto e dados de projetos pendentes/rejeitados permanecem privados. O histórico usa somente tipo, função, nome do projeto e data; não publica o texto livre da evidência.
@@ -61,6 +65,12 @@ Essas fronteiras são decisões de produto. A autenticação opcional via Discor
 - Discord é a opção principal de entrada quando o provedor está configurado; e-mail/senha permanece disponível. Contas existentes vinculam a identidade pela API oficial do Supabase, sem união manual por e-mail.
 - A seção Integrações do perfil é o local principal para conectar e gerenciar Discord. Em projetos em formação, a prontidão oferece um atalho somente para a própria conta; terceiros recebem apenas o aviso de conexão pendente. A interface mostra username quando disponível, nunca o ID Discord cru.
 - Conectar Discord não entra automaticamente no servidor. O membro usa convite normal; presença no servidor Discord não é requisito para solicitar entrada. A identidade Discord conectada continua obrigatória para solicitação e início da squad.
-- Ao iniciar uma execução real (`Project`), o bot prepara um canal privado para os membros conectados que já estejam no servidor. Um mesmo escopo pode gerar vários canais, um por squad. `ProjectTemplate` não possui canal.
+- Ao iniciar uma execução real (`Project`), o bot prepara canais privados de texto e voz para os membros conectados que já estejam no servidor. Um mesmo escopo pode gerar vários pares de canais, um por squad. `ProjectTemplate` não possui canal.
 - Owner ou ADMIN pode solicitar resync/retry. Iniciar exige identidade Discord conectada de todos os membros; a interface mostra a prontidão e quantos foram sincronizados no servidor. Falhas externas do bot não impedem lifecycle; concluir, cancelar e arquivar não exigem reconectar identidades.
-- Conclusão e cancelamento deixam mensagens no canal; cancelamento torna-o somente leitura. Arquivamento move-o para a categoria configurada e preserva o histórico. Nenhum canal é apagado automaticamente.
+- O par só aparece sincronizado quando texto e voz têm todos os membros sincronizados e estado terminal válido. Falhas de voz também permitem retry. Se o resultado da criação de voz for incerto, a administração precisa conferir o recurso antes de liberar nova criação ou recuperar seu vínculo; o app não associa canais pelo nome nem cria outro automaticamente nessa situação.
+- Conclusão e cancelamento deixam mensagens no canal de texto; cancelamento torna o texto somente leitura e bloqueia conexão de voz. Arquivamento move os canais para a categoria configurada, mantém texto preservado e deixa a voz inutilizável. Nenhum canal é apagado automaticamente.
+
+## Descoberta de projetos
+
+- Cards do catálogo mostram origem, status, áreas, tecnologias, owner quando houver, membros/capacidade e prazo planejado quando disponível. O CTA continua abrindo o detalhe do projeto; projetos em formação deixam claro que a solicitação de entrada acontece pelo detalhe.
+- O perfil do usuário só gera sinais visuais leves no cliente, como área compatível ou tecnologias conhecidas. Não há score, ranking, swipe, likes, recomendação persistida nem algoritmo de matching.

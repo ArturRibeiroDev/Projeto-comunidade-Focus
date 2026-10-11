@@ -16,6 +16,7 @@ import {
   availabilityHours,
   bioLength,
   BIO_MAX_LENGTH,
+  isProfileComplete,
   limitBio,
   safeExternalUrl,
 } from '../utils/profileFields';
@@ -69,6 +70,7 @@ export function ProfilePage({
   onCancel,
   onSubmit,
   busy,
+  onboarding = false,
 }: {
   profile: MemberProfile;
   discord: DiscordConnection;
@@ -81,8 +83,9 @@ export function ProfilePage({
   onCancel: () => void;
   onSubmit: (file?: File) => Promise<boolean>;
   busy: boolean;
+  onboarding?: boolean;
 }) {
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(onboarding);
   const [avatarFile, setAvatarFile] = useState<File>();
   const formRef = useRef<HTMLFormElement>(null);
   useEffect(() => {
@@ -116,27 +119,41 @@ export function ProfilePage({
   const invalidLink =
     Boolean(profile.links.github && !safeExternalUrl(profile.links.github)) ||
     Boolean(profile.links.linkedin && !safeExternalUrl(profile.links.linkedin));
+  const profileComplete = isProfileComplete(profile);
+  const canSubmit = !busy && !invalidLink && (!onboarding || profileComplete);
 
   return (
-    <div className="page-stack profile-page">
-      <div className="profile-heading-actions">
-        {!editing && (
-          <Button icon={<Pencil size={16} />} onClick={() => setEditing(true)}>
-            Editar perfil
-          </Button>
-        )}
-      </div>
-      <ProfileHeader profile={savedProfile} discordConnected={discord.connected} />
+    <div className={`page-stack profile-page ${onboarding ? 'onboarding-page' : ''}`}>
+      {!onboarding && (
+        <div className="profile-heading-actions">
+          {!editing && (
+            <Button icon={<Pencil size={16} />} onClick={() => setEditing(true)}>
+              Editar perfil
+            </Button>
+          )}
+        </div>
+      )}
+      {!onboarding && <ProfileHeader profile={savedProfile} discordConnected={discord.connected} />}
       {editing ? (
         <form className="structured-form profile-edit-form" onSubmit={submit} ref={formRef}>
           <div className="form-intro field-wide">
-            <h2>Editar perfil</h2>
+            <h2>{onboarding ? 'Monte seu perfil' : 'Editar perfil'}</h2>
+            {onboarding && (
+              <p>
+                Essas informações ajudam você a encontrar squads e projetos mais alinhados ao seu
+                momento.
+              </p>
+            )}
           </div>
           <section className="profile-edit-section field-wide">
             <h3>Informações pessoais</h3>
             <div className="profile-edit-grid">
               <AvatarUploader
-                avatarUrl={profile.avatarUrl.includes('api.dicebear.com/') ? '' : profile.avatarUrl}
+                avatarUrl={
+                  (profile.avatarUrl ?? '').includes('api.dicebear.com/')
+                    ? ''
+                    : (profile.avatarUrl ?? '')
+                }
                 file={avatarFile}
                 name={profile.name}
                 onFile={setAvatarFile}
@@ -289,17 +306,30 @@ export function ProfilePage({
           {invalidLink && (
             <p className="field-error field-wide">Use links HTTP ou HTTPS válidos.</p>
           )}
+          {onboarding && !profileComplete && (
+            <p className="field-error field-wide">
+              Preencha nome, função principal e pelo menos uma área ou tecnologia.
+            </p>
+          )}
+          {onboarding && (
+            <section className="profile-edit-section field-wide onboarding-discord">
+              <h3>Discord</h3>
+              <p className="detail-note">
+                {discord.connected ? 'Discord conectado.' : 'Discord ainda não conectado.'} Ele será
+                necessário para solicitar entrada e iniciar squads, mas você pode concluir o perfil
+                agora.
+              </p>
+              <DiscordSection connection={discord} />
+            </section>
+          )}
           <div className="form-actions field-wide">
-            <Button disabled={busy} onClick={close}>
-              Cancelar
-            </Button>
-            <Button
-              disabled={busy || invalidLink}
-              icon={<Save size={17} />}
-              type="submit"
-              variant="primary"
-            >
-              {busy ? 'Salvando...' : 'Salvar alterações'}
+            {!onboarding && (
+              <Button disabled={busy} onClick={close}>
+                Cancelar
+              </Button>
+            )}
+            <Button disabled={!canSubmit} icon={<Save size={17} />} type="submit" variant="primary">
+              {busy ? 'Salvando...' : onboarding ? 'Concluir perfil' : 'Salvar alterações'}
             </Button>
           </div>
         </form>

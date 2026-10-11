@@ -5,7 +5,7 @@ import type {
 } from '../components/projects/ProjectLifecycleModal';
 import type { ProjectEditInput } from '../services/projectService';
 import type { DiscordConnection } from '../services/useDiscordIntegration';
-import type { Filters, ProjectDisplay } from '../types';
+import type { Filters, MemberProfile, ProjectDisplay } from '../types';
 import { ProjectCard } from '../components/projects/ProjectCard';
 import { ProjectDetail } from '../components/projects/ProjectDetail';
 import { ProjectFilters } from '../components/projects/ProjectFilters';
@@ -20,6 +20,7 @@ export function CatalogPage({
   onOpenMember,
   projectOptions,
   projects,
+  profile,
   selectedProject,
   profileId,
   discordConnected,
@@ -46,6 +47,7 @@ export function CatalogPage({
   onOpenMember?: (key: string) => void;
   projectOptions: { areas: string[]; technologies: string[] };
   projects: ProjectDisplay[];
+  profile: MemberProfile;
   selectedProject?: ProjectDisplay;
   profileId: string;
   discordConnected: boolean;
@@ -114,6 +116,7 @@ export function CatalogPage({
                   key={project.id}
                   onSelect={() => onSelect(project.id)}
                   project={project}
+                  profile={profile}
                   selected={selectedProject?.id === project.id}
                 />
               ))}

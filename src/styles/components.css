@@ -409,6 +409,27 @@
   gap: 5px;
 }
 
+.project-card-context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+}
+
+.profile-match-note {
+  width: fit-content;
+  max-width: 100%;
+  padding: 6px 8px;
+  border: 1px solid rgba(255, 90, 31, 0.24);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 90, 31, 0.08);
+  color: #ffb199;
+  font-size: 0.69rem;
+  font-weight: 620;
+  line-height: 1.35;
+}
+
 .member-meter {
   height: 3px;
   overflow: hidden;

@@ -83,7 +83,7 @@ psql 'service=focusedu_staging' -X -v ON_ERROR_STOP=1 -f supabase/preflight/chec
 
 Se falhar por preload, extensão indisponível ou permissão, PARE. Habilite Cron em Integrations -> Cron e pg_net em Database -> Extensions SOMENTE no Dashboard staging, confirme Vault e execute novamente. Não ajustar parâmetros de produção nem remover/reinstalar extensões: DROP de pg_cron apaga jobs. O PostgreSQL gerenciado precisa ter o background worker/preload provido pelo Supabase; o bootstrap não altera configuração do servidor nem dá privilégios de browser.
 
-4. Confira que o history remoto não tem migrations da aplicação e que as 17 locais estão em ordem. Se houver history/tabelas inesperadas, PARE e investigue em vez de reparar automaticamente. Só então aplique e IMEDIATAMENTE pause o job criado pela migration histórica:
+4. Confira que o history remoto não tem migrations da aplicação e que as migrations locais estão em ordem. Se houver history/tabelas inesperadas, PARE e investigue em vez de reparar automaticamente. Só então aplique e IMEDIATAMENTE pause o job criado pela migration histórica:
 
 ```bash
 npx supabase migration up --linked
@@ -191,6 +191,20 @@ Checklist remoto:
 6. Use retry/resync pela UI quando o erro for recuperável.
 7. Para rate limit, respeite `retry_after`.
 
+### Criação de voz incerta
+
+O worker grava `project_integrations.voice_creation_started_at` antes do POST de voz. Se o campo estiver preenchido e `external_id` nulo, retry/resync não cria outra voz: uma queda pode ter ocorrido antes do POST, depois da criação remota ou antes de persistir o ID. `markFailed` representa falha do evento inteiro e preserva essa reserva e os IDs dos dois canais.
+
+Procedimento operacional privilegiado, somente em ambiente autorizado:
+
+1. Pause o worker e impeça processamento manual concorrente durante a conferência; aguarde execuções em andamento terminarem. Não limpe a reserva apenas para fazer retry passar.
+2. Confira projeto, tipo de canal, horário da reserva, logs disponíveis e evidências administrativas do guild. Nome igual ou categoria igual não comprovam ownership do canal. Antes de ativar esta versão, confira também possíveis órfãos de tentativas feitas pela versão anterior, que ainda não gravava reserva.
+3. Se houver evidência suficiente do canal correto, persista seu ID real e nome na linha `provider = 'discord'`, `channel_kind = 'DISCORD_VOICE_CHANNEL'` do projeto. Preserve a reserva; o ID permite retomar o sync. Não altere a linha de texto.
+4. Se for comprovado que nenhum canal foi criado e nenhuma requisição está em andamento, a operação privilegiada pode limpar apenas `voice_creation_started_at` nessa linha sem ID, permitindo uma nova tentativa. Isso também vale para criação comprovadamente rejeitada pelo Discord. Sem certeza, mantenha bloqueado e investigue; não associe por aproximação e não apague canais automaticamente.
+5. Retome o worker e use retry/resync. Confirme IDs distintos, status terminal e `synced_count >= member_count` em texto e voz.
+
+Esta proteção evita repetir a criação de voz após resultado incerto, mas não torna Discord e Postgres uma transação única. Não requer nova permissão no bot; não existe recovery automático de voz por metadata nesta implementação.
+
 ## Discord Event Worker
 
 O worker usa `pg_cron` + `pg_net` para chamar a Edge Function `discord-events` com `action = worker`. A migration agenda o job e referencia apenas nomes no Supabase Vault; configure os valores reais no ambiente remoto antes de depender do job.
@@ -242,6 +256,8 @@ where provider = 'discord'
 order by created_at desc
 limit 20;
 ```
+
+Após `202610100001_discord_voice_channels.sql`, uma squad sincronizada deve ter registros separados em `project_integrations` para `DISCORD_TEXT_CHANNEL` e `DISCORD_VOICE_CHANNEL`. Resync deve criar apenas o tipo ausente quando texto ou voz estiver faltando.
 
 Desabilitar rapidamente:
 

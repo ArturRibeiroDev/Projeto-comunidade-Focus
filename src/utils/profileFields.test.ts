@@ -5,6 +5,7 @@ import {
   bioLength,
   BIO_MAX_LENGTH,
   canAddCustomTag,
+  isProfileComplete,
   limitBio,
   safeExternalUrl,
   tagSuggestions,
@@ -40,5 +41,31 @@ describe('profile fields', () => {
     expect(bioLength('😀')).toBe(1);
     expect(bioLength(limitBio('😀'.repeat(BIO_MAX_LENGTH + 1)))).toBe(BIO_MAX_LENGTH);
     expect(bioLength(limitBio('x'.repeat(601)))).toBe(600);
+  });
+  it('infers profile completion without a persisted onboarding flag', () => {
+    expect(
+      isProfileComplete({
+        name: 'Ana',
+        primaryRole: 'Backend',
+        areas: ['Backend'],
+        technologies: [],
+      }),
+    ).toBe(true);
+    expect(
+      isProfileComplete({
+        name: 'Ana',
+        primaryRole: 'Backend',
+        areas: [],
+        technologies: ['Node.js'],
+      }),
+    ).toBe(true);
+    expect(
+      isProfileComplete({
+        name: 'Ana',
+        primaryRole: '',
+        areas: ['Backend'],
+        technologies: [],
+      }),
+    ).toBe(false);
   });
 });

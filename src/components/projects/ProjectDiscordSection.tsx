@@ -51,8 +51,13 @@ export function ProjectDiscordSection({
         if (
           next.pendingEvent ||
           (!next.failedEvent &&
+            next.integration?.status !== 'FAILED' &&
+            next.voiceIntegration?.status !== 'FAILED' &&
             started &&
-            (!next.integration || next.integration.status === 'PENDING'))
+            (!next.integration ||
+              next.integration.status === 'PENDING' ||
+              !next.voiceIntegration ||
+              next.voiceIntegration.status === 'PENDING'))
         ) {
           timer = window.setTimeout(() => void refresh(), 2500);
         }
@@ -101,25 +106,38 @@ export function ProjectDiscordSection({
   };
 
   const integration = state?.integration;
+  const voiceIntegration = state?.voiceIntegration;
   const failed = state?.failedEvent;
   const synced = Boolean(
     integration?.external_id &&
+    voiceIntegration?.external_id &&
     ['ACTIVE', 'READ_ONLY', 'ARCHIVED'].includes(integration.status) &&
-    integration.synced_count >= integration.member_count,
+    ['ACTIVE', 'READ_ONLY', 'ARCHIVED'].includes(voiceIntegration.status) &&
+    integration.synced_count >= integration.member_count &&
+    voiceIntegration.synced_count >= voiceIntegration.member_count,
   );
+  const isFailed =
+    integration?.status === 'FAILED' || voiceIntegration?.status === 'FAILED' || Boolean(failed);
   const pending = Boolean(
     state?.pendingEvent ||
-    (!failed && (integration?.status === 'PENDING' || (!integration && started))),
+    (!isFailed &&
+      (integration?.status === 'PENDING' ||
+        voiceIntegration?.status === 'PENDING' ||
+        (!integration && started) ||
+        (!voiceIntegration && started))),
   );
-  const isFailed = integration?.status === 'FAILED' || Boolean(failed);
   const recoverable =
     !synced &&
     !pending &&
     Boolean(
       isFailed ||
       integration?.last_error ||
+      voiceIntegration?.last_error ||
       (integration &&
-        (!integration.external_id || integration.synced_count < integration.member_count)),
+        (!integration.external_id || integration.synced_count < integration.member_count)) ||
+      (voiceIntegration &&
+        (!voiceIntegration.external_id ||
+          voiceIntegration.synced_count < voiceIntegration.member_count)),
     );
   const retryAvailable =
     failed && (!failed.retry_after || new Date(failed.retry_after) <= new Date());
@@ -136,11 +154,12 @@ export function ProjectDiscordSection({
       ) : (
         <>
           {pending ? (
-            <p className="detail-note">Sincronizando canal Discord...</p>
+            <p className="detail-note">Sincronizando canais Discord...</p>
           ) : isFailed && !synced ? (
             <>
               <p className="field-error">
-                Falha ao sincronizar Discord. {integration?.last_error || failed?.last_error}
+                Falha ao sincronizar Discord.{' '}
+                {integration?.last_error || voiceIntegration?.last_error || failed?.last_error}
               </p>
               {integration && (
                 <p className="detail-note">
@@ -161,16 +180,23 @@ export function ProjectDiscordSection({
               <p className="detail-note">
                 {synced
                   ? integration.status === 'ARCHIVED'
-                    ? 'Canal Discord arquivado'
+                    ? 'Canais Discord arquivados'
                     : integration.status === 'READ_ONLY'
-                      ? 'Canal Discord somente leitura'
-                      : 'Canal Discord ativo'
-                  : 'Canal da squad'}
+                      ? 'Canais Discord somente leitura'
+                      : 'Canais Discord ativos'
+                  : 'Canais da squad'}
               </p>
               {projectName && <p className="detail-note">{projectName}</p>}
               <p className="detail-note">
                 {integration.synced_count} de {integration.member_count} membros sincronizados
               </p>
+              {synced && <p className="detail-note">Canal de voz privado sincronizado.</p>}
+              {!synced && voiceIntegration && (
+                <p className="detail-note">
+                  Voz: {voiceIntegration.synced_count} de {voiceIntegration.member_count} membros
+                  sincronizados
+                </p>
+              )}
             </>
           ) : !started && (status === 'CANCELLED' || status === 'ARCHIVED') ? (
             <p className="detail-note">

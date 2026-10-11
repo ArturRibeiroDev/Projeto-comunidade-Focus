@@ -54,7 +54,7 @@ vi.mock('./services/profileService', () => ({
     primaryRole: 'QA',
     evidence: [],
     technologies: [],
-    areas: [],
+    areas: ['QA'],
     interests: [],
     links: {},
   }),

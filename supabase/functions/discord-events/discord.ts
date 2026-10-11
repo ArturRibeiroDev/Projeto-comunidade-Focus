@@ -25,6 +25,8 @@ export class DiscordApiError extends Error {
 const VIEW_CHANNEL = 1024;
 const SEND_MESSAGES = 2048;
 const READ_HISTORY = 65536;
+const CONNECT = 1048576;
+const SPEAK = 2097152;
 
 export function channelName(name: string): string {
   const slug = name
@@ -42,7 +44,15 @@ export function channelTopic(projectId: string): string {
   return `FocusAcademy project:${projectId}`;
 }
 
-export function channelOverwrites(
+export function voiceChannelName(name: string): string {
+  return channelName(name);
+}
+
+export function textChannelTopic(projectId: string): string {
+  return channelTopic(projectId);
+}
+
+export function textChannelOverwrites(
   guildId: string,
   botId: string,
   memberIds: string[],
@@ -53,6 +63,30 @@ export function channelOverwrites(
   return [
     { id: guildId, type: 0, allow: '0', deny: String(VIEW_CHANNEL) },
     { id: botId, type: 1, allow: String(VIEW_CHANNEL | SEND_MESSAGES | READ_HISTORY), deny: '0' },
+    ...[...new Set(memberIds)]
+      .filter((id) => id !== botId)
+      .map((id) => ({
+        id,
+        type: 1 as const,
+        allow: String(access),
+        deny: String(denied),
+      })),
+  ];
+}
+
+export const channelOverwrites = textChannelOverwrites;
+
+export function voiceChannelOverwrites(
+  guildId: string,
+  botId: string,
+  memberIds: string[],
+  locked: boolean,
+): ChannelOverwrite[] {
+  const access = VIEW_CHANNEL | (locked ? 0 : CONNECT | SPEAK);
+  const denied = locked ? CONNECT | SPEAK : 0;
+  return [
+    { id: guildId, type: 0, allow: '0', deny: String(VIEW_CHANNEL) },
+    { id: botId, type: 1, allow: String(VIEW_CHANNEL | CONNECT | SPEAK), deny: '0' },
     ...[...new Set(memberIds)]
       .filter((id) => id !== botId)
       .map((id) => ({
@@ -116,23 +150,24 @@ export class DiscordClient {
   async createChannel(
     guildId: string,
     name: string,
-    topic: string,
+    topic: string | null,
     parentId: string,
     overwrites: ChannelOverwrite[],
+    type = 0,
   ): Promise<DiscordChannel> {
     return this.request<DiscordChannel>(`/guilds/${guildId}/channels`, 'POST', {
       name,
-      topic,
-      type: 0,
+      ...(topic ? { topic } : {}),
+      type,
       parent_id: parentId,
       permission_overwrites: overwrites,
     });
   }
 
-  async updateChannel(channelId: string, parentId: string, topic: string): Promise<void> {
+  async updateChannel(channelId: string, parentId: string, topic?: string): Promise<void> {
     await this.request(`/channels/${channelId}`, 'PATCH', {
       parent_id: parentId,
-      topic,
+      ...(topic ? { topic } : {}),
       lock_permissions: false,
     });
   }

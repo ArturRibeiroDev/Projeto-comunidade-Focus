@@ -285,11 +285,29 @@ describe('Discord identity linking UX', () => {
           last_error: null,
           last_synced_at: null,
         },
+        voiceIntegration: {
+          external_id: null,
+          external_name: null,
+          status: 'PENDING',
+          member_count: 1,
+          synced_count: 0,
+          last_error: null,
+          last_synced_at: null,
+        },
         failedEvent: null,
       })
       .mockResolvedValue({
         integration: {
           external_id: 'channel-id',
+          external_name: 'squad',
+          status: 'ACTIVE',
+          member_count: 1,
+          synced_count: 1,
+          last_error: null,
+          last_synced_at: new Date().toISOString(),
+        },
+        voiceIntegration: {
+          external_id: 'voice-id',
           external_name: 'squad',
           status: 'ACTIVE',
           member_count: 1,
@@ -316,11 +334,11 @@ describe('Discord identity linking UX', () => {
       );
     }
     render(<SplitState />);
-    await screen.findByText('Sincronizando canal Discord...');
+    await screen.findByText('Sincronizando canais Discord...');
     expect(screen.getByText('Conectado')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Tentar sincronizar novamente' })).toBeNull();
 
-    await screen.findByText('Canal Discord ativo', {}, { timeout: 4000 });
+    await screen.findByText('Canais Discord ativos', {}, { timeout: 4000 });
     expect(screen.queryByRole('button', { name: 'Tentar sincronizar novamente' })).toBeNull();
     expect(screen.getByText('Conectado')).toBeTruthy();
     expect(mocks.getProjectDiscordIntegration).toHaveBeenCalledTimes(2);

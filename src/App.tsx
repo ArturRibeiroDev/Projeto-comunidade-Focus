@@ -56,6 +56,7 @@ import type {
   ProjectTemplate,
 } from './types';
 import { collectProjectOptions, createEmptyFilters, filterProjects } from './utils/projectFilters';
+import { isProfileComplete } from './utils/profileFields';
 import {
   createDefaultProjectForm,
   type ProjectFormState,
@@ -459,6 +460,25 @@ function App() {
         <Button onClick={signOutUser}>Sair</Button>
       </main>
     );
+  if (!isProfileComplete(profile))
+    return (
+      <main className="onboarding-shell">
+        <ProfilePage
+          discord={discord}
+          busy={busy}
+          editRequest={0}
+          onCancel={() => setProfileDraft(profile)}
+          onChange={setProfileDraft}
+          onSubmit={saveProfile}
+          profile={profileDraft}
+          gamification={gamification}
+          savedProfile={profile}
+          projects={catalogue}
+          skillOptions={skillOptions}
+          onboarding
+        />
+      </main>
+    );
   const navigate = (view: View) => {
     if (view !== 'admin' || account.platform_role !== 'MEMBER') setActiveView(view);
   };
@@ -551,6 +571,7 @@ function App() {
           discordConnected={discordConnected}
           projectOptions={projectOptions}
           projects={visibleProjects}
+          profile={profile}
           selectedProject={selectedProject}
         />
       )}

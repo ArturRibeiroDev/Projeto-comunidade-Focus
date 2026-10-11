@@ -124,10 +124,9 @@ async function loadProcessingContext(
     admin.from('project_members').select('user_id,main_role').eq('project_id', projectId),
     admin
       .from('project_integrations')
-      .select('external_id,external_name')
+      .select('channel_kind,external_id,external_name')
       .eq('project_id', projectId)
-      .eq('provider', 'discord')
-      .maybeSingle(),
+      .eq('provider', 'discord'),
   ]);
   if (projectResult.error || memberResult.error || integrationResult.error) {
     throw new Error('Dados indisponíveis');
@@ -159,6 +158,18 @@ async function loadProcessingContext(
     discordId: discordIds.get(member.user_id) ?? null,
   }));
 
+  const integrationRows = (integrationResult.data ?? []) as Array<{
+    channel_kind?: string;
+    external_id: string | null;
+    external_name: string | null;
+  }>;
+  const textIntegration =
+    integrationRows.find((item) => item.channel_kind === 'DISCORD_TEXT_CHANNEL') ??
+    integrationRows.find((item) => item.channel_kind == null);
+  const voiceIntegration = integrationRows.find(
+    (item) => item.channel_kind === 'DISCORD_VOICE_CHANNEL',
+  );
+
   return {
     guildId,
     activeCategoryId,
@@ -167,7 +178,17 @@ async function loadProcessingContext(
     botId,
     project: projectResult.data as ProjectData,
     members,
-    integration: integrationResult.data ?? { external_id: null, external_name: null },
+    integration: {
+      text: textIntegration
+        ? { external_id: textIntegration.external_id, external_name: textIntegration.external_name }
+        : { external_id: null, external_name: null },
+      voice: voiceIntegration
+        ? {
+            external_id: voiceIntegration.external_id,
+            external_name: voiceIntegration.external_name,
+          }
+        : { external_id: null, external_name: null },
+    },
     event,
     api,
   };
@@ -180,6 +201,7 @@ async function markFailed(
 ) {
   const retryAfter = nextDiscordRetryAt(failure, event.attempts);
   const failureKind = retryAfter ? 'RETRYABLE' : 'FINAL';
+  // FAILED describes the whole event; keep each resource ID and its creation reservation.
   const [eventResult, integrationResult] = await Promise.all([
     admin
       .from('integration_events')
@@ -193,16 +215,15 @@ async function markFailed(
       })
       .eq('id', event.id)
       .eq('processing_token', event.processing_token),
-    admin.from('project_integrations').upsert(
-      {
-        project_id: event.project_id,
-        provider: 'discord',
+    admin
+      .from('project_integrations')
+      .update({
         status: 'FAILED',
         last_error: failure.message,
         updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'project_id,provider' },
-    ),
+      })
+      .eq('project_id', event.project_id)
+      .eq('provider', 'discord'),
   ]);
   if (eventResult.error) throw eventResult.error;
   if (integrationResult.error) throw integrationResult.error;
@@ -214,6 +235,29 @@ async function processClaimedEvent(admin: AdminClient, event: ClaimedDiscordEven
     const context = await loadProcessingContext(admin, event.project_id, event);
     await processDiscordEvent({
       ...context,
+      reserveVoiceCreation: async () => {
+        const row = {
+          project_id: event.project_id,
+          provider: 'discord',
+          channel_kind: 'DISCORD_VOICE_CHANNEL',
+        };
+        const ensured = await admin.from('project_integrations').upsert(row, {
+          onConflict: 'project_id,provider,channel_kind',
+          ignoreDuplicates: true,
+        });
+        if (ensured.error) throw ensured.error;
+        const reserved = await admin
+          .from('project_integrations')
+          .update({ voice_creation_started_at: new Date().toISOString() })
+          .eq('project_id', event.project_id)
+          .eq('provider', 'discord')
+          .eq('channel_kind', 'DISCORD_VOICE_CHANNEL')
+          .is('external_id', null)
+          .is('voice_creation_started_at', null)
+          .select('id');
+        if (reserved.error) throw reserved.error;
+        return reserved.data?.length === 1;
+      },
       saveIntegration: async (data) => {
         const result = await admin.from('project_integrations').upsert(
           {
@@ -223,7 +267,7 @@ async function processClaimedEvent(admin: AdminClient, event: ClaimedDiscordEven
             last_synced_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           },
-          { onConflict: 'project_id,provider' },
+          { onConflict: 'project_id,provider,channel_kind' },
         );
         if (result.error) throw result.error;
       },
@@ -373,6 +417,7 @@ Deno.serve(async (request) => {
         .select('external_id')
         .eq('project_id', projectId)
         .eq('provider', 'discord')
+        .eq('channel_kind', 'DISCORD_TEXT_CHANNEL')
         .maybeSingle();
       if (integration.error) throw integration.error;
       const channelId = integration.data?.external_id;

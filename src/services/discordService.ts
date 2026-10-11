@@ -1,6 +1,7 @@
 import { getSupabase } from '../lib/supabase';
 
 export type ProjectDiscordIntegration = {
+  channel_kind?: 'DISCORD_TEXT_CHANNEL' | 'DISCORD_VOICE_CHANNEL';
   external_id: string | null;
   external_name: string | null;
   status: 'PENDING' | 'ACTIVE' | 'READ_ONLY' | 'ARCHIVED' | 'FAILED';
@@ -49,11 +50,10 @@ export async function getProjectDiscordIntegration(projectId: string) {
     client
       .from('project_integrations')
       .select(
-        'external_id,external_name,status,member_count,synced_count,last_error,last_synced_at',
+        'channel_kind,external_id,external_name,status,member_count,synced_count,last_error,last_synced_at',
       )
       .eq('project_id', projectId)
-      .eq('provider', 'discord')
-      .maybeSingle(),
+      .eq('provider', 'discord'),
     client
       .from('integration_events')
       .select('id,status,event_type,attempts,last_error,retry_after,failure_kind,last_attempted_at')
@@ -64,8 +64,16 @@ export async function getProjectDiscordIntegration(projectId: string) {
   ]);
   if (integration.error) throw integration.error;
   if (events.error) throw events.error;
+  const integrations = (integration.data ?? []) as ProjectDiscordIntegration[];
+  const textIntegration =
+    integrations.find((item) => item.channel_kind === 'DISCORD_TEXT_CHANNEL') ??
+    integrations.find((item) => item.channel_kind == null) ??
+    null;
+  const voiceIntegration =
+    integrations.find((item) => item.channel_kind === 'DISCORD_VOICE_CHANNEL') ?? null;
   return {
-    integration: integration.data as ProjectDiscordIntegration | null,
+    integration: textIntegration,
+    voiceIntegration,
     pendingEvent:
       (events.data as DiscordEventStatus[]).find(
         (event) => event.status === 'PENDING' || event.status === 'PROCESSING',

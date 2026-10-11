@@ -1374,6 +1374,28 @@
 .profile-edit-form .form-intro {
   margin-bottom: 6px;
 }
+.profile-edit-form .form-intro p {
+  max-width: 680px;
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+.onboarding-shell {
+  min-height: 100vh;
+  padding: 28px clamp(16px, 5vw, 72px);
+  background: var(--background);
+}
+.onboarding-page {
+  max-width: 920px;
+  margin: 0 auto;
+}
+.onboarding-page .structured-form {
+  padding: 26px;
+}
+.onboarding-discord .discord-section {
+  margin-top: 12px;
+}
 .profile-edit-section {
   padding: 20px 0;
   border-bottom: 1px solid var(--border);
