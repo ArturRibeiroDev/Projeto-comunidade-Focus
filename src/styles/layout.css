@@ -20,14 +20,16 @@
   flex-shrink: 0;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
+  padding: 0 12px;
   border-bottom: 1px solid var(--border);
 }
 
 .focus-brand {
   display: block;
-  width: min(100%, 220px);
+  width: calc(100% + 8px);
+  max-width: none;
   height: auto;
+  margin-inline: -4px;
   object-fit: contain;
   mix-blend-mode: screen;
 }
